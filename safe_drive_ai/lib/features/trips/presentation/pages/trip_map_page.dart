@@ -69,11 +69,11 @@ class _TripMapPageState extends State<TripMapPage> {
       orElse: () => cameras.first,
     );
 
-    // Initialize both in parallel
-    await Future.wait([
-      _initSingleCamera(frontCam, isfront: true),
-      if (frontCam != rearCam) _initSingleCamera(rearCam, isfront: false),
-    ]);
+    // Sequential — many devices cannot open two cameras simultaneously in parallel
+    await _initSingleCamera(frontCam, isfront: true);
+    if (frontCam.name != rearCam.name) {
+      await _initSingleCamera(rearCam, isfront: false);
+    }
   }
 
   Future<void> _initSingleCamera(
