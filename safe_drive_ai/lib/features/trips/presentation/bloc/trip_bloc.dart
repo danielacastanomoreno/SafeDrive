@@ -35,7 +35,11 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   final SaveRoutePointUseCase _saveRoutePointUseCase;
 
   Timer? _timer;
+  Timer? _inactivityTimer;
   StreamSubscription<Position>? _positionSub;
+
+  // Auto-end trip after 20 min with no GPS movement
+  static const _inactivityTimeout = Duration(minutes: 20);
 
   // ── Timer ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +53,22 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
+  }
+
+  // ── Inactivity timer ──────────────────────────────────────────────────────────
+
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    _inactivityTimer = Timer(_inactivityTimeout, () {
+      if (state is TripActive) {
+        add(TripEndRequested(tripId: (state as TripActive).trip.id));
+      }
+    });
+  }
+
+  void _stopInactivityTimer() {
+    _inactivityTimer?.cancel();
+    _inactivityTimer = null;
   }
 
   // ── GPS ──────────────────────────────────────────────────────────────────────
@@ -82,6 +102,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   Future<void> close() {
     _stopTimer();
     _stopLocationTracking();
+    _stopInactivityTimer();
     return super.close();
   }
 
@@ -104,6 +125,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
           emit(TripActive(trip: trip, elapsed: trip.elapsed));
           _startTimer();
           _startLocationTracking();
+          _resetInactivityTimer();
         }
       },
     );
@@ -126,6 +148,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         emit(TripActive(trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
         _startTimer();
         _startLocationTracking();
+        _resetInactivityTimer();
       },
     );
   }
@@ -136,6 +159,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   ) async {
     _stopTimer();
     _stopLocationTracking();
+    _stopInactivityTimer();
     emit(const TripLoading());
     final result = await _endTripUseCase(EndTripParams(tripId: event.tripId));
     result.fold(
@@ -166,6 +190,9 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         lng: event.lng,
       ),
     );
+
+    // Reset inactivity timer — driver is still moving
+    _resetInactivityTimer();
 
     // Update local route for map display
     final updatedRoute = List<LatLng>.from(current.route)

@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum TripStatus { active, completed }
+enum TripStatus { active, onBreak, completed }
 
 class TripEntity extends Equatable {
   const TripEntity({

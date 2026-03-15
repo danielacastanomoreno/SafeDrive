@@ -21,9 +21,11 @@ class TripModel extends TripEntity {
           ? (map['endTime'] as Timestamp).toDate()
           : null,
       hasCameraPermission: map['hasCameraPermission'] as bool? ?? false,
-      status: (map['status'] as String?) == 'completed'
-          ? TripStatus.completed
-          : TripStatus.active,
+      status: switch (map['status'] as String? ?? 'active') {
+        'completed' => TripStatus.completed,
+        'onBreak'   => TripStatus.onBreak,
+        _           => TripStatus.active,
+      },
     );
   }
 
@@ -32,6 +34,10 @@ class TripModel extends TripEntity {
         'startTime': Timestamp.fromDate(startTime),
         'endTime': endTime != null ? Timestamp.fromDate(endTime!) : null,
         'hasCameraPermission': hasCameraPermission,
-        'status': status == TripStatus.completed ? 'completed' : 'active',
+        'status': switch (status) {
+          TripStatus.completed => 'completed',
+          TripStatus.onBreak   => 'onBreak',
+          TripStatus.active    => 'active',
+        },
       };
 }
