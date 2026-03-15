@@ -3,14 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/nit_input_formatter.dart';
-import '../../../../core/utils/nit_validator.dart';
 import '../../../../core/utils/validators.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../widgets/auth_error_widget.dart';
 import '../widgets/auth_text_field_widget.dart';
+import '../widgets/nit_field_widget.dart';
 import '../widgets/password_field_widget.dart';
 import '../widgets/primary_button_widget.dart';
 
@@ -29,7 +28,7 @@ class CompanyRegisterPage extends StatefulWidget {
 class _CompanyRegisterPageState extends State<CompanyRegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _nitController = TextEditingController();
+  String? _nitValue;
   final _emailController = TextEditingController();
   final _representativeNameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -38,7 +37,6 @@ class _CompanyRegisterPageState extends State<CompanyRegisterPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _nitController.dispose();
     _emailController.dispose();
     _representativeNameController.dispose();
     _passwordController.dispose();
@@ -48,10 +46,12 @@ class _CompanyRegisterPageState extends State<CompanyRegisterPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    if (_nitValue == null) return;
+
     context.read<AuthBloc>().add(
           AuthCompanyRegisterRequested(
             name: _nameController.text.trim(),
-            nit: _nitController.text.trim(),
+            nit: _nitValue!.trim(),
             email: _emailController.text.trim(),
             password: _passwordController.text,
             representativeName: _representativeNameController.text.trim(),
@@ -115,16 +115,9 @@ class _CompanyRegisterPageState extends State<CompanyRegisterPage> {
                     ),
                     const SizedBox(height: 16),
                     // 2. NIT
-                    AuthTextFieldWidget(
-                      label: 'NIT',
-                      hint: '900123456-1',
-                      controller: _nitController,
-                      validator: NitValidator.getError,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      prefixIcon: Icons.badge_outlined,
+                    NitFieldWidget(
                       enabled: !isLoading,
-                      inputFormatters: [NitInputFormatter()],
+                      onChanged: (value) => setState(() => _nitValue = value),
                     ),
                     const SizedBox(height: 16),
                     // 3. Correo electrónico

@@ -51,14 +51,6 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
   }
 
   void _onDigitsChanged() {
-    final digits = _digitsController.text;
-    if (digits.length == 9) {
-      // Auto-calcular el DV correcto
-      final calculatedDv = _calculateDv(digits);
-      if (_selectedDv != calculatedDv) {
-        setState(() => _selectedDv = calculatedDv);
-      }
-    }
     _notify();
   }
 
@@ -69,16 +61,6 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
     } else {
       widget.onChanged(null);
     }
-  }
-
-  int _calculateDv(String digits) {
-    const weights = [71, 67, 59, 53, 47, 43, 41, 37, 29];
-    int sum = 0;
-    for (int i = 0; i < 9; i++) {
-      sum += int.parse(digits[i]) * weights[i];
-    }
-    final residuo = sum % 11;
-    return residuo >= 2 ? 11 - residuo : residuo;
   }
 
   InputDecoration _decoration(String label, {Widget? suffix}) {
@@ -121,7 +103,7 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // ── Campo de 9 dígitos ──────────────────────────────────
                 Expanded(
@@ -133,13 +115,16 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                     maxLength: 9,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(color: AppColors.textPrimary),
+                    onChanged: (val) {
+                      final currentNit = val.length == 9 && _selectedDv != null ? '$val-$_selectedDv' : null;
+                      field.didChange(currentNit);
+                    },
                     decoration: _decoration('NIT (9 dígitos)').copyWith(
                       counterText: '',
                       prefixIcon: const Icon(
                         Icons.badge_outlined,
                         color: AppColors.textSecondary,
                       ),
-                      errorText: field.errorText,
                       errorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(_borderRadius),
                         borderSide: const BorderSide(color: AppColors.error),
@@ -152,26 +137,26 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // ── Guion decorativo ────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     '–',
                     style: TextStyle(
                       fontSize: 20,
                       color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w300,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 // ── Dropdown DV ─────────────────────────────────────────
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<int>(
                     value: _selectedDv,
-                    decoration: _decoration('DV'),
+                    decoration: _decoration('DV').copyWith(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 16,
@@ -188,12 +173,22 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                         ? (value) {
                             setState(() => _selectedDv = value);
                             _notify();
+                            final val = _digitsController.text;
+                            field.didChange(val.length == 9 && value != null ? '$val-$value' : null);
                           }
                         : null,
                   ),
                 ),
               ],
             ),
+            if (field.hasError)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 12),
+                child: Text(
+                  field.errorText!,
+                  style: const TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+              ),
           ],
         );
       },

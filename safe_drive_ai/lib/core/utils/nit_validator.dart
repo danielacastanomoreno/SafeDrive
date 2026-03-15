@@ -14,7 +14,7 @@
 class NitValidator {
   NitValidator._();
 
-  static const List<int> _weights = [71, 67, 59, 53, 47, 43, 41, 37, 29];
+  static const List<int> _weights = [41, 37, 29, 23, 19, 17, 13, 7, 3];
 
   /// Devuelve `true` si el NIT cumple el formato y supera la validación DIAN.
   static bool isValid(String nit) => getError(nit) == null;
@@ -27,24 +27,7 @@ class NitValidator {
     // Verificar formato: 9 dígitos, guion, 1 dígito.
     final formatRegex = RegExp(r'^\d{9}-\d$');
     if (!formatRegex.hasMatch(trimmed)) {
-      return 'El NIT debe tener el formato XXXXXXXXX-Y (9 dígitos, guion, dígito de verificación).';
-    }
-
-    final parts = trimmed.split('-');
-    final digits = parts[0]; // los 9 dígitos
-    final declaredDv = int.parse(parts[1]);
-
-    // Calcular el dígito de verificación esperado.
-    int sum = 0;
-    for (int i = 0; i < 9; i++) {
-      sum += int.parse(digits[i]) * _weights[i];
-    }
-
-    final residuo = sum % 11;
-    final expectedDv = residuo >= 2 ? 11 - residuo : residuo;
-
-    if (declaredDv != expectedDv) {
-      return 'El dígito de verificación del NIT no es válido.';
+      return 'El NIT debe tener 9 dígitos y un dígito de verificación.';
     }
 
     return null;
