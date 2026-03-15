@@ -73,6 +73,11 @@ class _TripMapPageState extends State<TripMapPage> {
     await _initSingleCamera(frontCam, isfront: true);
     if (frontCam.name != rearCam.name) {
       await _initSingleCamera(rearCam, isfront: false);
+      // Android pauses the first camera's preview when a second one opens.
+      // Resume it explicitly so the front (selfie) doesn't stay frozen.
+      try {
+        await _frontController?.resumePreview();
+      } catch (_) {}
     }
   }
 
