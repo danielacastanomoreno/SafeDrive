@@ -69,15 +69,17 @@ class _TripMapPageState extends State<TripMapPage> {
       orElse: () => cameras.first,
     );
 
-    // Sequential — many devices cannot open two cameras simultaneously in parallel
-    await _initSingleCamera(frontCam, isfront: true);
+    // Init rear first, then front.
+    // On Android, opening a camera pauses the previous one.
+    // By opening front last it starts streaming immediately;
+    // we then resume rear which was paused when front opened.
     if (frontCam.name != rearCam.name) {
       await _initSingleCamera(rearCam, isfront: false);
-      // Android pauses previews when a second camera opens.
-      // Resume both so neither stays frozen.
+    }
+    await _initSingleCamera(frontCam, isfront: true);
+    if (frontCam.name != rearCam.name) {
       try {
         await _rearController?.resumePreview();
-        await _frontController?.resumePreview();
       } catch (_) {}
     }
   }
