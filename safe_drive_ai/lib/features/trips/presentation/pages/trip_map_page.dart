@@ -10,10 +10,10 @@ import '../bloc/trip_bloc.dart';
 import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
 
-/// Mapa en vivo con traza azul del recorrido y overlay de cámara frontal.
+/// Mapa en vivo con traza azul, overlay de cámara frontal (conductor) y
+/// overlay de cámara trasera (vía/entorno).
 ///
-/// Se muestra como 4to índice en el [IndexedStack] del [DriverHomePage]
-/// para compartir el mismo [TripBloc] sin complicaciones de navegación.
+/// Se muestra como 4to índice en el [IndexedStack] del [DriverHomePage].
 class TripMapPage extends StatefulWidget {
   const TripMapPage({super.key, required this.onClose});
 
@@ -28,19 +28,26 @@ class _TripMapPageState extends State<TripMapPage> {
   final MapController _mapController = MapController();
   bool _followDriver = true;
 
-  // ── Camera ────────────────────────────────────────────────────────────────
-  CameraController? _cameraController;
-  bool _cameraReady = false;
-  bool _cameraOverlayVisible = true;
+  // ── Front camera (selfie — conductor) ────────────────────────────────────
+  CameraController? _frontController;
+  bool _frontReady = false;
+  bool _frontVisible = true;
+
+  // ── Rear camera (trasera — vía) ───────────────────────────────────────────
+  CameraController? _rearController;
+  bool _rearReady = false;
+  bool _rearVisible = true;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    _initCameras();
   }
 
-  Future<void> _initCamera() async {
-    if (_cameraReady) return; // already running
+  // ── Camera initialization ─────────────────────────────────────────────────
+
+  Future<void> _initCameras() async {
+    if (_frontReady) return; // already done
 
     final status = await Permission.camera.status;
     if (!status.isGranted) return;
@@ -53,34 +60,56 @@ class _TripMapPageState extends State<TripMapPage> {
     }
     if (cameras.isEmpty) return;
 
-    // Dispose previous controller if any
-    await _cameraController?.dispose();
-    _cameraController = null;
-
-    final front = cameras.firstWhere(
+    final frontCam = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
+    final rearCam = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras.first,
+    );
 
-    _cameraController = CameraController(
-      front,
+    // Initialize both in parallel
+    await Future.wait([
+      _initSingleCamera(frontCam, isfront: true),
+      if (frontCam != rearCam) _initSingleCamera(rearCam, isfront: false),
+    ]);
+  }
+
+  Future<void> _initSingleCamera(
+    CameraDescription cam, {
+    required bool isfront,
+  }) async {
+    final ctrl = CameraController(
+      cam,
       ResolutionPreset.low,
       enableAudio: false,
     );
-
     try {
-      await _cameraController!.initialize();
-      if (mounted) setState(() => _cameraReady = true);
+      await ctrl.initialize();
+      if (!mounted) {
+        await ctrl.dispose();
+        return;
+      }
+      setState(() {
+        if (isfront) {
+          _frontController = ctrl;
+          _frontReady = true;
+        } else {
+          _rearController = ctrl;
+          _rearReady = true;
+        }
+      });
     } catch (_) {
-      await _cameraController?.dispose();
-      _cameraController = null;
+      await ctrl.dispose();
     }
   }
 
   @override
   void dispose() {
     _mapController.dispose();
-    _cameraController?.dispose();
+    _frontController?.dispose();
+    _rearController?.dispose();
     super.dispose();
   }
 
@@ -128,8 +157,8 @@ class _TripMapPageState extends State<TripMapPage> {
     return BlocConsumer<TripBloc, TripState>(
       listener: (context, state) {
         if (state is TripActive && state.isNewlyStarted) {
-          // Permission was just granted moments ago — try camera now
-          _initCamera();
+          // Permission was just granted — re-try camera init
+          _initCameras();
         }
         if (state is TripActive && state.route.isNotEmpty && _followDriver) {
           _mapController.move(
@@ -142,12 +171,13 @@ class _TripMapPageState extends State<TripMapPage> {
         final route = state.route;
         final currentPosition = route.isNotEmpty ? route.last : null;
         final topPadding = MediaQuery.of(context).padding.top;
+        final overlayTop = topPadding + 80.0;
 
         return Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
             children: [
-              // ── 1. Map (full screen) ──────────────────────────────────────
+              // ── 1. Map ────────────────────────────────────────────────────
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -180,7 +210,6 @@ class _TripMapPageState extends State<TripMapPage> {
                   if (route.isNotEmpty)
                     MarkerLayer(
                       markers: [
-                        // Start marker — green dot
                         Marker(
                           point: route.first,
                           width: 16,
@@ -199,7 +228,6 @@ class _TripMapPageState extends State<TripMapPage> {
                   if (currentPosition != null)
                     MarkerLayer(
                       markers: [
-                        // Current position — blue navigation icon
                         Marker(
                           point: currentPosition,
                           width: 44,
@@ -212,10 +240,9 @@ class _TripMapPageState extends State<TripMapPage> {
                                   Border.all(color: Colors.white, width: 3),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Colors.black38,
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
+                                    color: Colors.black38,
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2)),
                               ],
                             ),
                             child: const Icon(Icons.navigation,
@@ -227,7 +254,7 @@ class _TripMapPageState extends State<TripMapPage> {
                 ],
               ),
 
-              // ── 2. Top bar (back + timer pill) ────────────────────────────
+              // ── 2. Top bar ────────────────────────────────────────────────
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -248,7 +275,8 @@ class _TripMapPageState extends State<TripMapPage> {
                             borderRadius: BorderRadius.circular(30),
                             boxShadow: const [
                               BoxShadow(
-                                  color: Colors.black38, blurRadius: 6,
+                                  color: Colors.black38,
+                                  blurRadius: 6,
                                   offset: Offset(0, 2))
                             ],
                           ),
@@ -287,26 +315,47 @@ class _TripMapPageState extends State<TripMapPage> {
                 ),
               ),
 
-              // ── 3. Camera overlay (top-right, below top bar) ──────────────
-              if (_cameraReady && _cameraController != null)
+              // ── 3. Rear camera overlay — top-left (vía/entorno) ───────────
+              if (_rearReady && _rearController != null)
                 Positioned(
-                  top: topPadding + 80,
-                  right: 12,
-                  child: _cameraOverlayVisible
+                  top: overlayTop,
+                  left: 12,
+                  child: _rearVisible
                       ? _CameraOverlay(
-                          controller: _cameraController!,
+                          controller: _rearController!,
+                          label: 'Cámara trasera',
+                          mirror: false,
                           onClose: () =>
-                              setState(() => _cameraOverlayVisible = false),
+                              setState(() => _rearVisible = false),
                         )
                       : _MapButton(
-                          icon: Icons.videocam_outlined,
-                          onTap: () =>
-                              setState(() => _cameraOverlayVisible = true),
-                          tooltip: 'Mostrar cámara',
+                          icon: Icons.camera_rear_outlined,
+                          onTap: () => setState(() => _rearVisible = true),
+                          tooltip: 'Mostrar cámara trasera',
                         ),
                 ),
 
-              // ── 4. Bottom controls ────────────────────────────────────────
+              // ── 4. Front camera overlay — top-right (conductor/selfie) ────
+              if (_frontReady && _frontController != null)
+                Positioned(
+                  top: overlayTop,
+                  right: 12,
+                  child: _frontVisible
+                      ? _CameraOverlay(
+                          controller: _frontController!,
+                          label: 'Conductor',
+                          mirror: true,
+                          onClose: () =>
+                              setState(() => _frontVisible = false),
+                        )
+                      : _MapButton(
+                          icon: Icons.camera_front_outlined,
+                          onTap: () => setState(() => _frontVisible = true),
+                          tooltip: 'Mostrar cámara frontal',
+                        ),
+                ),
+
+              // ── 5. Bottom controls ────────────────────────────────────────
               Positioned(
                 bottom: 24,
                 left: 16,
@@ -383,15 +432,19 @@ class _TripMapPageState extends State<TripMapPage> {
   }
 }
 
-// ── Camera overlay widget ─────────────────────────────────────────────────────
+// ── Camera overlay ────────────────────────────────────────────────────────────
 
 class _CameraOverlay extends StatelessWidget {
   const _CameraOverlay({
     required this.controller,
+    required this.label,
+    required this.mirror,
     required this.onClose,
   });
 
   final CameraController controller;
+  final String label;
+  final bool mirror; // true = selfie (horizontally flipped)
   final VoidCallback onClose;
 
   @override
@@ -403,19 +456,20 @@ class _CameraOverlay extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [
-          BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 3))
+          BoxShadow(
+              color: Colors.black54, blurRadius: 10, offset: Offset(0, 3))
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Camera preview (mirrored like a selfie)
+          // Preview (mirrored only for front/selfie)
           Transform.scale(
-            scaleX: -1, // mirror horizontally for selfie effect
+            scaleX: mirror ? -1.0 : 1.0,
             child: CameraPreview(controller),
           ),
-          // Close button (top-right corner)
+          // Close button
           Positioned(
             top: 4,
             right: 4,
@@ -428,22 +482,23 @@ class _CameraOverlay extends StatelessWidget {
                   color: Colors.black54,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, color: Colors.white, size: 14),
+                child:
+                    const Icon(Icons.close, color: Colors.white, size: 14),
               ),
             ),
           ),
-          // "Cámara" label at bottom
+          // Label
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              color: Colors.black38,
+              color: Colors.black45,
               padding: const EdgeInsets.symmetric(vertical: 3),
-              child: const Text(
-                'Cámara frontal',
+              child: Text(
+                label,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 9,
                   fontWeight: FontWeight.w500,
