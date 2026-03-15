@@ -10,8 +10,7 @@ import '../bloc/trip_bloc.dart';
 import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
 
-/// Mapa en vivo con traza azul, overlay de cámara frontal (conductor) y
-/// overlay de cámara trasera (vía/entorno).
+/// Mapa en vivo con traza azul y overlay de cámara frontal (conductor).
 ///
 /// Se muestra como 4to índice en el [IndexedStack] del [DriverHomePage].
 class TripMapPage extends StatefulWidget {
@@ -33,21 +32,16 @@ class _TripMapPageState extends State<TripMapPage> {
   bool _frontReady = false;
   bool _frontVisible = true;
 
-  // ── Rear camera (trasera — vía) ───────────────────────────────────────────
-  CameraController? _rearController;
-  bool _rearReady = false;
-  bool _rearVisible = true;
-
   @override
   void initState() {
     super.initState();
-    _initCameras();
+    _initCamera();
   }
 
   // ── Camera initialization ─────────────────────────────────────────────────
 
-  Future<void> _initCameras() async {
-    if (_frontReady) return; // already done
+  Future<void> _initCamera() async {
+    if (_frontReady) return;
 
     final status = await Permission.camera.status;
     if (!status.isGranted) return;
@@ -64,32 +58,9 @@ class _TripMapPageState extends State<TripMapPage> {
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    final rearCam = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
-    );
 
-    // Init rear first, then front.
-    // On Android, opening a camera pauses the previous one.
-    // By opening front last it starts streaming immediately;
-    // we then resume rear which was paused when front opened.
-    if (frontCam.name != rearCam.name) {
-      await _initSingleCamera(rearCam, isfront: false);
-    }
-    await _initSingleCamera(frontCam, isfront: true);
-    if (frontCam.name != rearCam.name) {
-      try {
-        await _rearController?.resumePreview();
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _initSingleCamera(
-    CameraDescription cam, {
-    required bool isfront,
-  }) async {
     final ctrl = CameraController(
-      cam,
+      frontCam,
       ResolutionPreset.low,
       enableAudio: false,
     );
@@ -100,13 +71,8 @@ class _TripMapPageState extends State<TripMapPage> {
         return;
       }
       setState(() {
-        if (isfront) {
-          _frontController = ctrl;
-          _frontReady = true;
-        } else {
-          _rearController = ctrl;
-          _rearReady = true;
-        }
+        _frontController = ctrl;
+        _frontReady = true;
       });
     } catch (_) {
       await ctrl.dispose();
@@ -117,7 +83,6 @@ class _TripMapPageState extends State<TripMapPage> {
   void dispose() {
     _mapController.dispose();
     _frontController?.dispose();
-    _rearController?.dispose();
     super.dispose();
   }
 
@@ -166,7 +131,7 @@ class _TripMapPageState extends State<TripMapPage> {
       listener: (context, state) {
         if (state is TripActive && state.isNewlyStarted) {
           // Permission was just granted — re-try camera init
-          _initCameras();
+          _initCamera();
         }
         if (state is TripActive && state.route.isNotEmpty && _followDriver) {
           _mapController.move(
@@ -323,27 +288,7 @@ class _TripMapPageState extends State<TripMapPage> {
                 ),
               ),
 
-              // ── 3. Rear camera overlay — top-left (vía/entorno) ───────────
-              if (_rearReady && _rearController != null)
-                Positioned(
-                  top: overlayTop,
-                  left: 12,
-                  child: _rearVisible
-                      ? _CameraOverlay(
-                          controller: _rearController!,
-                          label: 'Cámara trasera',
-                          mirror: false,
-                          onClose: () =>
-                              setState(() => _rearVisible = false),
-                        )
-                      : _MapButton(
-                          icon: Icons.camera_rear_outlined,
-                          onTap: () => setState(() => _rearVisible = true),
-                          tooltip: 'Mostrar cámara trasera',
-                        ),
-                ),
-
-              // ── 4. Front camera overlay — top-right (conductor/selfie) ────
+              // ── 3. Front camera overlay — top-right (conductor/selfie) ────
               if (_frontReady && _frontController != null)
                 Positioned(
                   top: overlayTop,
@@ -351,19 +296,17 @@ class _TripMapPageState extends State<TripMapPage> {
                   child: _frontVisible
                       ? _CameraOverlay(
                           controller: _frontController!,
-                          label: 'Conductor',
-                          mirror: true,
                           onClose: () =>
                               setState(() => _frontVisible = false),
                         )
                       : _MapButton(
                           icon: Icons.camera_front_outlined,
                           onTap: () => setState(() => _frontVisible = true),
-                          tooltip: 'Mostrar cámara frontal',
+                          tooltip: 'Mostrar cámara',
                         ),
                 ),
 
-              // ── 5. Bottom controls ────────────────────────────────────────
+              // ── 4. Bottom controls ────────────────────────────────────────
               Positioned(
                 bottom: 24,
                 left: 16,
@@ -445,14 +388,10 @@ class _TripMapPageState extends State<TripMapPage> {
 class _CameraOverlay extends StatelessWidget {
   const _CameraOverlay({
     required this.controller,
-    required this.label,
-    required this.mirror,
     required this.onClose,
   });
 
   final CameraController controller;
-  final String label;
-  final bool mirror; // true = selfie (horizontally flipped)
   final VoidCallback onClose;
 
   @override
@@ -472,12 +411,10 @@ class _CameraOverlay extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Preview (mirrored only for front/selfie)
           Transform.scale(
-            scaleX: mirror ? -1.0 : 1.0,
+            scaleX: -1.0, // mirror for selfie
             child: CameraPreview(controller),
           ),
-          // Close button
           Positioned(
             top: 4,
             right: 4,
@@ -495,7 +432,6 @@ class _CameraOverlay extends StatelessWidget {
               ),
             ),
           ),
-          // Label
           Positioned(
             bottom: 0,
             left: 0,
@@ -503,10 +439,10 @@ class _CameraOverlay extends StatelessWidget {
             child: Container(
               color: Colors.black45,
               padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Text(
-                label,
+              child: const Text(
+                'Conductor',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 9,
                   fontWeight: FontWeight.w500,
