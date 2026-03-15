@@ -111,3 +111,35 @@ class CompanyProfileUpdateRequested extends CompanyEvent {
   @override
   List<Object?> get props => [companyId, name, representativeName];
 }
+
+/// Solicita registrar un conductor nuevo en la plataforma desde la empresa.
+class CompanyDriverRegisterRequested extends CompanyEvent {
+  const CompanyDriverRegisterRequested({
+    required this.companyId,
+    required this.companyName,
+    required this.name,
+    required this.cedula,
+    required this.email,
+    required this.phone,
+    required this.cargo,
+  });
+
+  final String companyId;
+  final String companyName;
+  final String name;
+  final String cedula;
+  final String email;
+  final String phone;
+  final String cargo;
+
+  @override
+  List<Object?> get props => [
+        companyId,
+        companyName,
+        name,
+        cedula,
+        email,
+        phone,
+        cargo,
+      ];
+}

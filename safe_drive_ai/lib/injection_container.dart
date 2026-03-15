@@ -28,6 +28,7 @@ import 'features/company/domain/usecases/cancel_invitation_usecase.dart';
 import 'features/company/domain/usecases/get_company_drivers_usecase.dart';
 import 'features/company/domain/usecases/get_company_invitations_usecase.dart';
 import 'features/company/domain/usecases/get_driver_profile_usecase.dart';
+import 'features/company/domain/usecases/register_driver_by_company_usecase.dart';
 import 'features/company/domain/usecases/send_invitation_usecase.dart';
 import 'features/company/domain/usecases/unlink_driver_usecase.dart';
 import 'features/company/domain/usecases/update_company_profile_usecase.dart';
@@ -115,7 +116,7 @@ void _initAuth() {
 void _initCompany() {
   // Datasource
   sl.registerLazySingleton<CompanyDatasource>(
-    () => CompanyDatasourceImpl(firestore: sl()),
+    () => CompanyDatasourceImpl(firestore: sl(), firebaseAuth: sl()),
   );
 
   // Repository
@@ -131,6 +132,7 @@ void _initCompany() {
   sl.registerLazySingleton(() => GetCompanyInvitationsUseCase(sl()));
   sl.registerLazySingleton(() => CancelInvitationUseCase(sl()));
   sl.registerLazySingleton(() => UpdateCompanyProfileUseCase(sl()));
+  sl.registerLazySingleton(() => RegisterDriverByCompanyUseCase(sl()));
 
   // BLoC — factory para instancia fresca en cada CompanyHomePage
   sl.registerFactory(
@@ -141,6 +143,7 @@ void _initCompany() {
       getCompanyInvitationsUseCase: sl(),
       cancelInvitationUseCase: sl(),
       updateCompanyProfileUseCase: sl(),
+      registerDriverByCompanyUseCase: sl(),
     ),
   );
 }

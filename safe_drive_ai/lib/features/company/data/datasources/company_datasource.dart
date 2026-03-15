@@ -38,4 +38,16 @@ abstract class CompanyDatasource {
     required String name,
     required String representativeName,
   });
+
+  /// Crea una cuenta Firebase Auth para un conductor nuevo (sin cerrar sesión de
+  /// la empresa), crea el documento en `users`, el vínculo en `company_drivers`
+  /// y envía el correo de restablecimiento de contraseña.
+  Future<void> registerDriverByCompany({
+    required String companyId,
+    required String name,
+    required String cedula,
+    required String email,
+    required String phone,
+    required String cargo,
+  });
 }

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/usecases/cancel_invitation_usecase.dart';
 import '../../domain/usecases/get_company_drivers_usecase.dart';
 import '../../domain/usecases/get_company_invitations_usecase.dart';
+import '../../domain/usecases/register_driver_by_company_usecase.dart';
 import '../../domain/usecases/send_invitation_usecase.dart';
 import '../../domain/usecases/unlink_driver_usecase.dart';
 import '../../domain/usecases/update_company_profile_usecase.dart';
@@ -20,12 +21,14 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     required GetCompanyInvitationsUseCase getCompanyInvitationsUseCase,
     required CancelInvitationUseCase cancelInvitationUseCase,
     required UpdateCompanyProfileUseCase updateCompanyProfileUseCase,
+    required RegisterDriverByCompanyUseCase registerDriverByCompanyUseCase,
   })  : _getCompanyDriversUseCase = getCompanyDriversUseCase,
         _unlinkDriverUseCase = unlinkDriverUseCase,
         _sendInvitationUseCase = sendInvitationUseCase,
         _getCompanyInvitationsUseCase = getCompanyInvitationsUseCase,
         _cancelInvitationUseCase = cancelInvitationUseCase,
         _updateCompanyProfileUseCase = updateCompanyProfileUseCase,
+        _registerDriverByCompanyUseCase = registerDriverByCompanyUseCase,
         super(const CompanyInitial()) {
     on<CompanyDriversRequested>(_onDriversRequested);
     on<CompanyDriverUnlinkRequested>(_onDriverUnlinkRequested);
@@ -34,6 +37,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     on<CompanyInvitationCancelRequested>(_onInvitationCancelRequested);
     on<CompanyProfileRequested>(_onProfileRequested);
     on<CompanyProfileUpdateRequested>(_onProfileUpdateRequested);
+    on<CompanyDriverRegisterRequested>(_onDriverRegisterRequested);
   }
 
   final GetCompanyDriversUseCase _getCompanyDriversUseCase;
@@ -42,6 +46,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
   final GetCompanyInvitationsUseCase _getCompanyInvitationsUseCase;
   final CancelInvitationUseCase _cancelInvitationUseCase;
   final UpdateCompanyProfileUseCase _updateCompanyProfileUseCase;
+  final RegisterDriverByCompanyUseCase _registerDriverByCompanyUseCase;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -206,6 +211,44 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     result.fold(
       (failure) => emit(CompanyError(message: failure.message)),
       (company) => emit(CompanyProfileLoaded(company: company)),
+    );
+  }
+
+  Future<void> _onDriverRegisterRequested(
+    CompanyDriverRegisterRequested event,
+    Emitter<CompanyState> emit,
+  ) async {
+    emit(const CompanyLoading());
+
+    final result = await _registerDriverByCompanyUseCase(
+      RegisterDriverByCompanyParams(
+        companyId: event.companyId,
+        name: event.name,
+        cedula: event.cedula,
+        email: event.email,
+        phone: event.phone,
+        cargo: event.cargo,
+      ),
+    );
+
+    await result.fold(
+      (failure) async => emit(CompanyError(message: failure.message)),
+      (_) async {
+        emit(
+          const CompanyActionSuccess(
+            message:
+                'Conductor registrado exitosamente. Se enviaron las credenciales a su correo.',
+          ),
+        );
+        // Recarga la lista de conductores para que aparezca el nuevo registro
+        final driversResult = await _getCompanyDriversUseCase(
+          GetCompanyDriversParams(companyId: event.companyId),
+        );
+        driversResult.fold(
+          (failure) => emit(CompanyError(message: failure.message)),
+          (drivers) => emit(CompanyDriversLoaded(drivers: drivers)),
+        );
+      },
     );
   }
 }

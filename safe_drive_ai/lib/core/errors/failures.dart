@@ -106,3 +106,19 @@ class DriverAlreadyLinkedFailure extends Failure {
   const DriverAlreadyLinkedFailure()
       : super(message: 'Este conductor ya está vinculado a tu empresa.');
 }
+
+class CedulaAlreadyRegisteredFailure extends Failure {
+  const CedulaAlreadyRegisteredFailure()
+      : super(
+          message:
+              'Esta cédula ya está registrada. Usa "Invitar conductor" para vincularlo a tu empresa.',
+        );
+}
+
+class EmailAlreadyRegisteredFailure extends Failure {
+  const EmailAlreadyRegisteredFailure()
+      : super(
+          message:
+              'Este correo ya está registrado. Usa "Invitar conductor" para vincularlo a tu empresa.',
+        );
+}

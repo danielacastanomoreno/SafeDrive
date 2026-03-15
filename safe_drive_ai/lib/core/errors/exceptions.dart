@@ -115,3 +115,21 @@ class DriverAlreadyLinkedException implements Exception {
   @override
   String toString() => 'DriverAlreadyLinkedException';
 }
+
+/// La cédula proporcionada ya pertenece a un conductor registrado.
+/// La empresa debe usar "Invitar conductor" en su lugar.
+class CedulaAlreadyRegisteredException implements Exception {
+  const CedulaAlreadyRegisteredException();
+
+  @override
+  String toString() => 'CedulaAlreadyRegisteredException';
+}
+
+/// El correo proporcionado ya pertenece a una cuenta en Firebase Auth.
+/// La empresa debe usar "Invitar conductor" en su lugar.
+class EmailAlreadyRegisteredException implements Exception {
+  const EmailAlreadyRegisteredException();
+
+  @override
+  String toString() => 'EmailAlreadyRegisteredException';
+}

@@ -141,4 +141,34 @@ class CompanyRepositoryImpl implements CompanyRepository {
       return const Left(ServerFailure());
     }
   }
+
+  @override
+  Future<Either<Failure, void>> registerDriverByCompany({
+    required String companyId,
+    required String name,
+    required String cedula,
+    required String email,
+    required String phone,
+    required String cargo,
+  }) async {
+    try {
+      await _datasource.registerDriverByCompany(
+        companyId: companyId,
+        name: name,
+        cedula: cedula,
+        email: email,
+        phone: phone,
+        cargo: cargo,
+      );
+      return const Right(null);
+    } on CedulaAlreadyRegisteredException {
+      return const Left(CedulaAlreadyRegisteredFailure());
+    } on EmailAlreadyRegisteredException {
+      return const Left(EmailAlreadyRegisteredFailure());
+    } on FirestoreException catch (e) {
+      return Left(FirestoreFailure(message: e.message));
+    } catch (_) {
+      return const Left(ServerFailure());
+    }
+  }
 }

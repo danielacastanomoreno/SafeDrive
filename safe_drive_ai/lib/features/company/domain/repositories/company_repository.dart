@@ -59,4 +59,17 @@ abstract class CompanyRepository {
     required String name,
     required String representativeName,
   });
+
+  /// Registra un conductor nuevo en la plataforma desde la empresa.
+  ///
+  /// Crea cuenta en Firebase Auth, documento en `users` y vínculo en
+  /// `company_drivers`. Envía correo de restablecimiento al conductor.
+  Future<Either<Failure, void>> registerDriverByCompany({
+    required String companyId,
+    required String name,
+    required String cedula,
+    required String email,
+    required String phone,
+    required String cargo,
+  });
 }

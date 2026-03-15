@@ -101,6 +101,31 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 fontSize: 14,
               ),
             ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.warning, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Si no lo ves en tu bandeja principal, revisa la carpeta de spam o correo no deseado.',
+                      style: TextStyle(
+                        color: AppColors.warning,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 32),
             PrimaryButtonWidget(
               label: 'Volver al inicio de sesión',

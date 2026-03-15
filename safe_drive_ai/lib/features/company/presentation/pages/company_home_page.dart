@@ -49,6 +49,113 @@ class _CompanyHomePageState extends State<CompanyHomePage> {
     ),
   ];
 
+  void _showDriverActionSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Agregar conductor',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(height: 16),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.primarySurface,
+                    child: Icon(
+                      Icons.person_add_outlined,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  title: const Text(
+                    'Registrar conductor nuevo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'El conductor aún no tiene cuenta en Safe Drive AI',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(
+                      '/company/register-driver',
+                      extra: {
+                        'companyId': widget.company.id,
+                        'companyName': widget.company.name,
+                      },
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: AppColors.primarySurface,
+                    child: Icon(
+                      Icons.mail_outline,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  title: const Text(
+                    'Invitar conductor existente',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'El conductor ya tiene una cuenta en Safe Drive AI',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    setState(() => _currentIndex = 1);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<CompanyBloc>(
@@ -59,76 +166,83 @@ class _CompanyHomePageState extends State<CompanyHomePage> {
             context.go('/role-selection');
           }
         },
-        child: Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: AppBar(
-            automaticallyImplyLeading: false,
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.textOnPrimary,
-            elevation: 0,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Safe Drive AI',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textOnPrimary,
-                  ),
+        child: Builder(
+          builder: (context) {
+            return Scaffold(
+              backgroundColor: AppColors.background,
+              appBar: AppBar(
+                automaticallyImplyLeading: false,
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.textOnPrimary,
+                elevation: 0,
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Safe Drive AI',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textOnPrimary,
+                      ),
+                    ),
+                    Text(
+                      widget.company.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primaryLight,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  widget.company.name,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.primaryLight,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          body: IndexedStack(
-            index: _currentIndex,
-            children: [
-              CompanyDriversPage(
-                companyId: widget.company.id,
-                companyName: widget.company.name,
               ),
-              CompanyInvitationsPage(
-                companyId: widget.company.id,
-                companyName: widget.company.name,
-              ),
-              CompanyProfilePage(company: widget.company),
-            ],
-          ),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) => setState(() => _currentIndex = index),
-            selectedItemColor: AppColors.primary,
-            unselectedItemColor: AppColors.textSecondary,
-            backgroundColor: AppColors.surface,
-            elevation: 8,
-            type: BottomNavigationBarType.fixed,
-            items: _tabs
-                .map(
-                  (tab) => BottomNavigationBarItem(
-                    icon: Icon(tab.icon),
-                    activeIcon: Icon(tab.activeIcon),
-                    label: tab.label,
+              body: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  CompanyDriversPage(
+                    companyId: widget.company.id,
+                    companyName: widget.company.name,
                   ),
-                )
-                .toList(),
-          ),
-          floatingActionButton: _currentIndex == 0
-              ? FloatingActionButton(
-                  onPressed: () => setState(() => _currentIndex = 1),
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.textOnPrimary,
-                  tooltip: 'Invitar conductor',
-                  child: const Icon(Icons.person_add_outlined),
-                )
-              : null,
+                  CompanyInvitationsPage(
+                    companyId: widget.company.id,
+                    companyName: widget.company.name,
+                  ),
+                  CompanyProfilePage(company: widget.company),
+                ],
+              ),
+              bottomNavigationBar: BottomNavigationBar(
+                currentIndex: _currentIndex,
+                onTap: (index) => setState(() => _currentIndex = index),
+                selectedItemColor: AppColors.primary,
+                unselectedItemColor: AppColors.textSecondary,
+                backgroundColor: AppColors.surface,
+                elevation: 8,
+                type: BottomNavigationBarType.fixed,
+                items: _tabs
+                    .map(
+                      (tab) => BottomNavigationBarItem(
+                        icon: Icon(tab.icon),
+                        activeIcon: Icon(tab.activeIcon),
+                        label: tab.label,
+                      ),
+                    )
+                    .toList(),
+              ),
+              floatingActionButton: _currentIndex == 0
+                  ? FloatingActionButton.extended(
+                      onPressed: () => _showDriverActionSheet(context),
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.textOnPrimary,
+                      icon: const Icon(Icons.person_add_outlined),
+                      label: const Text(
+                        'Agregar conductor',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    )
+                  : null,
+            );
+          },
         ),
       ),
     );
