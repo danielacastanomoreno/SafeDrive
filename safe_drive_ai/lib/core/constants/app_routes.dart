@@ -13,6 +13,8 @@ import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/company/presentation/pages/company_home_page.dart';
 import '../../features/company/presentation/pages/register_driver_page.dart';
 import '../../features/driver/presentation/pages/driver_home_page.dart';
+import '../../features/trips/domain/entities/trip_entity.dart';
+import '../../features/trips/presentation/pages/trip_summary_page.dart';
 
 /// Configuración del router de Safe Drive AI.
 ///
@@ -86,6 +88,14 @@ class AppRouter {
             companyId: extra['companyId']!,
             companyName: extra['companyName']!,
           );
+        },
+      ),
+      GoRoute(
+        path: '/trip/summary',
+        builder: (context, state) {
+          final trip = state.extra as TripEntity?;
+          if (trip == null) return const RoleSelectionPage();
+          return TripSummaryPage(trip: trip);
         },
       ),
     ],

@@ -8,6 +8,13 @@ import '../../../auth/domain/entities/company_link_entity.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../trips/domain/usecases/end_trip_usecase.dart';
+import '../../../trips/domain/usecases/get_active_trip_usecase.dart';
+import '../../../trips/domain/usecases/start_trip_usecase.dart';
+import '../../../trips/presentation/bloc/trip_bloc.dart';
+import '../../../trips/presentation/bloc/trip_event.dart';
+import '../../../trips/presentation/bloc/trip_state.dart';
+import '../../../trips/presentation/widgets/trip_panel_widget.dart';
 import '../../domain/usecases/accept_invitation_usecase.dart';
 import '../../domain/usecases/get_driver_invitations_usecase.dart';
 import '../../domain/usecases/get_driver_linked_companies_usecase.dart';
@@ -20,8 +27,8 @@ import 'driver_profile_page.dart';
 
 /// Página principal del conductor.
 ///
-/// Provee el [DriverBloc] para todos los tabs. Escucha [AuthBloc]
-/// para redirigir a `/role-selection` cuando la sesión se cierra.
+/// Provee [DriverBloc] y [TripBloc] para todos los tabs.
+/// El [TripPanelWidget] se muestra de forma persistente sobre los tabs.
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({
     super.key,
@@ -38,7 +45,6 @@ class DriverHomePage extends StatefulWidget {
 
 class _DriverHomePageState extends State<DriverHomePage> {
   int _currentIndex = 0;
-
   late final List<Widget> _tabs;
 
   @override
@@ -53,20 +59,43 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<DriverBloc>(
-      create: (_) => DriverBloc(
-        getDriverInvitationsUseCase: sl<GetDriverInvitationsUseCase>(),
-        acceptInvitationUseCase: sl<AcceptInvitationUseCase>(),
-        rejectInvitationUseCase: sl<RejectInvitationUseCase>(),
-        getDriverLinkedCompaniesUseCase: sl<GetDriverLinkedCompaniesUseCase>(),
-        updateDriverProfileUseCase: sl<UpdateDriverProfileUseCase>(),
-      ),
-      child: BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthLoggedOut) {
-            context.go('/role-selection');
-          }
-        },
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<DriverBloc>(
+          create: (_) => DriverBloc(
+            getDriverInvitationsUseCase: sl<GetDriverInvitationsUseCase>(),
+            acceptInvitationUseCase: sl<AcceptInvitationUseCase>(),
+            rejectInvitationUseCase: sl<RejectInvitationUseCase>(),
+            getDriverLinkedCompaniesUseCase:
+                sl<GetDriverLinkedCompaniesUseCase>(),
+            updateDriverProfileUseCase: sl<UpdateDriverProfileUseCase>(),
+          ),
+        ),
+        BlocProvider<TripBloc>(
+          create: (_) => TripBloc(
+            startTripUseCase: sl<StartTripUseCase>(),
+            endTripUseCase: sl<EndTripUseCase>(),
+            getActiveTripUseCase: sl<GetActiveTripUseCase>(),
+          )..add(TripCheckActiveRequested(driverId: widget.driver.id)),
+        ),
+      ],
+      child: MultiBlocListener(
+        listeners: [
+          BlocListener<AuthBloc, AuthState>(
+            listener: (context, state) {
+              if (state is AuthLoggedOut) {
+                context.go('/role-selection');
+              }
+            },
+          ),
+          BlocListener<TripBloc, TripState>(
+            listener: (context, state) {
+              if (state is TripEnded) {
+                context.push('/trip/summary', extra: state.trip);
+              }
+            },
+          ),
+        ],
         child: Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -93,9 +122,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
               ],
             ),
           ),
-          body: IndexedStack(
-            index: _currentIndex,
-            children: _tabs,
+          body: Column(
+            children: [
+              TripPanelWidget(driverId: widget.driver.id),
+              Expanded(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: _tabs,
+                ),
+              ),
+            ],
           ),
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: _currentIndex,

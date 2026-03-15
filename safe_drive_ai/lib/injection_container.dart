@@ -42,6 +42,13 @@ import 'features/driver/domain/usecases/get_driver_invitations_usecase.dart';
 import 'features/driver/domain/usecases/get_driver_linked_companies_usecase.dart';
 import 'features/driver/domain/usecases/reject_invitation_usecase.dart';
 import 'features/driver/domain/usecases/update_driver_profile_usecase.dart';
+import 'features/trips/data/datasources/trip_datasource.dart';
+import 'features/trips/data/datasources/trip_datasource_impl.dart';
+import 'features/trips/data/repositories/trip_repository_impl.dart';
+import 'features/trips/domain/repositories/trip_repository.dart';
+import 'features/trips/domain/usecases/end_trip_usecase.dart';
+import 'features/trips/domain/usecases/get_active_trip_usecase.dart';
+import 'features/trips/domain/usecases/start_trip_usecase.dart';
 
 /// Contenedor global de inyección de dependencias de Safe Drive AI.
 ///
@@ -65,6 +72,7 @@ Future<void> init() async {
   _initAuth();
   _initCompany();
   _initDriver();
+  _initTrips();
 }
 
 void _initAuth() {
@@ -165,4 +173,21 @@ void _initDriver() {
   sl.registerLazySingleton(() => RejectInvitationUseCase(sl()));
   sl.registerLazySingleton(() => GetDriverLinkedCompaniesUseCase(sl()));
   sl.registerLazySingleton(() => UpdateDriverProfileUseCase(sl()));
+}
+
+void _initTrips() {
+  // Datasource
+  sl.registerLazySingleton<TripDatasource>(
+    () => TripDatasourceImpl(firestore: sl()),
+  );
+
+  // Repository
+  sl.registerLazySingleton<TripRepository>(
+    () => TripRepositoryImpl(sl()),
+  );
+
+  // Use cases
+  sl.registerLazySingleton(() => StartTripUseCase(sl()));
+  sl.registerLazySingleton(() => EndTripUseCase(sl()));
+  sl.registerLazySingleton(() => GetActiveTripUseCase(sl()));
 }

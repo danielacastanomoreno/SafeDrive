@@ -116,6 +116,13 @@ class DriverAlreadyLinkedException implements Exception {
   String toString() => 'DriverAlreadyLinkedException';
 }
 
+class TripAlreadyActiveException implements Exception {
+  const TripAlreadyActiveException();
+
+  @override
+  String toString() => 'TripAlreadyActiveException';
+}
+
 /// La cédula proporcionada ya pertenece a un conductor registrado.
 /// La empresa debe usar "Invitar conductor" en su lugar.
 class CedulaAlreadyRegisteredException implements Exception {
