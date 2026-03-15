@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../domain/usecases/end_trip_usecase.dart';
 import '../../domain/usecases/get_active_trip_usecase.dart';
+import '../../domain/usecases/save_route_point_usecase.dart';
 import '../../domain/usecases/start_trip_usecase.dart';
 import 'trip_event.dart';
 import 'trip_state.dart';
@@ -13,21 +16,28 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     required StartTripUseCase startTripUseCase,
     required EndTripUseCase endTripUseCase,
     required GetActiveTripUseCase getActiveTripUseCase,
+    required SaveRoutePointUseCase saveRoutePointUseCase,
   })  : _startTripUseCase = startTripUseCase,
         _endTripUseCase = endTripUseCase,
         _getActiveTripUseCase = getActiveTripUseCase,
+        _saveRoutePointUseCase = saveRoutePointUseCase,
         super(const TripInitial()) {
     on<TripCheckActiveRequested>(_onCheckActive);
     on<TripStartRequested>(_onStartTrip);
     on<TripEndRequested>(_onEndTrip);
     on<TripTick>(_onTick);
+    on<TripLocationUpdated>(_onLocationUpdated);
   }
 
   final StartTripUseCase _startTripUseCase;
   final EndTripUseCase _endTripUseCase;
   final GetActiveTripUseCase _getActiveTripUseCase;
+  final SaveRoutePointUseCase _saveRoutePointUseCase;
 
   Timer? _timer;
+  StreamSubscription<Position>? _positionSub;
+
+  // ── Timer ────────────────────────────────────────────────────────────────────
 
   void _startTimer() {
     _timer?.cancel();
@@ -41,11 +51,41 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     _timer = null;
   }
 
+  // ── GPS ──────────────────────────────────────────────────────────────────────
+
+  Future<void> _startLocationTracking() async {
+    await _positionSub?.cancel();
+
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return; // trip continues without GPS tracking
+    }
+
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 20, // meters — update every 20m moved
+    );
+
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+        .listen((position) {
+      add(TripLocationUpdated(lat: position.latitude, lng: position.longitude));
+    });
+  }
+
+  void _stopLocationTracking() {
+    _positionSub?.cancel();
+    _positionSub = null;
+  }
+
   @override
   Future<void> close() {
     _stopTimer();
+    _stopLocationTracking();
     return super.close();
   }
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
   Future<void> _onCheckActive(
     TripCheckActiveRequested event,
@@ -63,6 +103,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         } else {
           emit(TripActive(trip: trip, elapsed: trip.elapsed));
           _startTimer();
+          _startLocationTracking();
         }
       },
     );
@@ -84,6 +125,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
       (trip) {
         emit(TripActive(trip: trip, elapsed: Duration.zero));
         _startTimer();
+        _startLocationTracking();
       },
     );
   }
@@ -93,6 +135,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     Emitter<TripState> emit,
   ) async {
     _stopTimer();
+    _stopLocationTracking();
     emit(const TripLoading());
     final result = await _endTripUseCase(EndTripParams(tripId: event.tripId));
     result.fold(
@@ -104,7 +147,30 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   void _onTick(TripTick event, Emitter<TripState> emit) {
     if (state is TripActive) {
       final current = state as TripActive;
-      emit(TripActive(trip: current.trip, elapsed: current.trip.elapsed));
+      emit(current.copyWith(elapsed: current.trip.elapsed));
     }
+  }
+
+  Future<void> _onLocationUpdated(
+    TripLocationUpdated event,
+    Emitter<TripState> emit,
+  ) async {
+    if (state is! TripActive) return;
+    final current = state as TripActive;
+
+    // Save to Firestore (fire-and-forget — errors are silently ignored)
+    _saveRoutePointUseCase(
+      SaveRoutePointParams(
+        tripId: current.trip.id,
+        lat: event.lat,
+        lng: event.lng,
+      ),
+    );
+
+    // Update local route for map display
+    final updatedRoute = List<LatLng>.from(current.route)
+      ..add(LatLng(event.lat, event.lng));
+
+    emit(current.copyWith(route: updatedRoute));
   }
 }

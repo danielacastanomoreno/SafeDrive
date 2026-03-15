@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../domain/entities/trip_entity.dart';
+import '../models/route_point_model.dart';
 import '../models/trip_model.dart';
 import 'trip_datasource.dart';
 
@@ -81,5 +82,35 @@ class TripDatasourceImpl implements TripDatasource {
     if (snapshot.docs.isEmpty) return null;
     final doc = snapshot.docs.first;
     return TripModel.fromMap(doc.id, doc.data());
+  }
+
+  @override
+  Future<void> saveRoutePoint({
+    required String tripId,
+    required double lat,
+    required double lng,
+  }) async {
+    await _firestore
+        .collection('trips')
+        .doc(tripId)
+        .collection('route_points')
+        .add({
+      'lat': lat,
+      'lng': lng,
+      'recordedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<List<RoutePointModel>> getTripRoute(String tripId) async {
+    final snapshot = await _firestore
+        .collection('trips')
+        .doc(tripId)
+        .collection('route_points')
+        .orderBy('recordedAt')
+        .get();
+    return snapshot.docs
+        .map((doc) => RoutePointModel.fromMap(doc.data()))
+        .toList();
   }
 }

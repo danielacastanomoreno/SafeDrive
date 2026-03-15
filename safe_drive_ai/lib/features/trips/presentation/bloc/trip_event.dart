@@ -9,7 +9,6 @@ abstract class TripEvent extends Equatable {
 
 class TripCheckActiveRequested extends TripEvent {
   const TripCheckActiveRequested({required this.driverId});
-
   final String driverId;
 
   @override
@@ -21,7 +20,6 @@ class TripStartRequested extends TripEvent {
     required this.driverId,
     required this.hasCameraPermission,
   });
-
   final String driverId;
   final bool hasCameraPermission;
 
@@ -31,14 +29,23 @@ class TripStartRequested extends TripEvent {
 
 class TripEndRequested extends TripEvent {
   const TripEndRequested({required this.tripId});
-
   final String tripId;
 
   @override
   List<Object?> get props => [tripId];
 }
 
-/// Dispatched internally every second while a trip is active. Do not use externally.
+/// Internal — dispatched every second by the Timer.
 class TripTick extends TripEvent {
   const TripTick();
+}
+
+/// Internal — dispatched when GPS emits a new position.
+class TripLocationUpdated extends TripEvent {
+  const TripLocationUpdated({required this.lat, required this.lng});
+  final double lat;
+  final double lng;
+
+  @override
+  List<Object?> get props => [lat, lng];
 }

@@ -10,10 +10,12 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../trips/domain/usecases/end_trip_usecase.dart';
 import '../../../trips/domain/usecases/get_active_trip_usecase.dart';
+import '../../../trips/domain/usecases/save_route_point_usecase.dart';
 import '../../../trips/domain/usecases/start_trip_usecase.dart';
 import '../../../trips/presentation/bloc/trip_bloc.dart';
 import '../../../trips/presentation/bloc/trip_event.dart';
 import '../../../trips/presentation/bloc/trip_state.dart';
+import '../../../trips/presentation/pages/trip_map_page.dart';
 import '../../../trips/presentation/widgets/trip_panel_widget.dart';
 import '../../domain/usecases/accept_invitation_usecase.dart';
 import '../../domain/usecases/get_driver_invitations_usecase.dart';
@@ -28,7 +30,7 @@ import 'driver_profile_page.dart';
 /// Página principal del conductor.
 ///
 /// Provee [DriverBloc] y [TripBloc] para todos los tabs.
-/// El [TripPanelWidget] se muestra de forma persistente sobre los tabs.
+/// El índice 3 del [IndexedStack] es el mapa en vivo [TripMapPage].
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({
     super.key,
@@ -45,20 +47,29 @@ class DriverHomePage extends StatefulWidget {
 
 class _DriverHomePageState extends State<DriverHomePage> {
   int _currentIndex = 0;
-  late final List<Widget> _tabs;
+  late final TripBloc _tripBloc;
 
   @override
   void initState() {
     super.initState();
-    _tabs = [
-      DriverCompaniesPage(driver: widget.driver),
-      DriverInvitationsPage(driver: widget.driver),
-      DriverProfilePage(driver: widget.driver),
-    ];
+    _tripBloc = TripBloc(
+      startTripUseCase: sl<StartTripUseCase>(),
+      endTripUseCase: sl<EndTripUseCase>(),
+      getActiveTripUseCase: sl<GetActiveTripUseCase>(),
+      saveRoutePointUseCase: sl<SaveRoutePointUseCase>(),
+    )..add(TripCheckActiveRequested(driverId: widget.driver.id));
+  }
+
+  @override
+  void dispose() {
+    _tripBloc.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool showingMap = _currentIndex == 3;
+
     return MultiBlocProvider(
       providers: [
         BlocProvider<DriverBloc>(
@@ -71,13 +82,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
             updateDriverProfileUseCase: sl<UpdateDriverProfileUseCase>(),
           ),
         ),
-        BlocProvider<TripBloc>(
-          create: (_) => TripBloc(
-            startTripUseCase: sl<StartTripUseCase>(),
-            endTripUseCase: sl<EndTripUseCase>(),
-            getActiveTripUseCase: sl<GetActiveTripUseCase>(),
-          )..add(TripCheckActiveRequested(driverId: widget.driver.id)),
-        ),
+        BlocProvider<TripBloc>.value(value: _tripBloc),
       ],
       child: MultiBlocListener(
         listeners: [
@@ -91,6 +96,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
           BlocListener<TripBloc, TripState>(
             listener: (context, state) {
               if (state is TripEnded) {
+                // Navigate back to main tabs if map is showing
+                if (_currentIndex == 3) {
+                  setState(() => _currentIndex = 0);
+                }
                 context.push('/trip/summary', extra: state.trip);
               }
             },
@@ -98,66 +107,78 @@ class _DriverHomePageState extends State<DriverHomePage> {
         ],
         child: Scaffold(
           backgroundColor: AppColors.background,
-          appBar: AppBar(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.textOnPrimary,
-            elevation: 0,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Safe Drive AI',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          appBar: showingMap
+              ? null // TripMapPage has its own full-screen UI
+              : AppBar(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.textOnPrimary,
+                  elevation: 0,
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Safe Drive AI',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        widget.driver.name,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w400),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  widget.driver.name,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
           body: Column(
             children: [
-              TripPanelWidget(driverId: widget.driver.id),
+              // Trip panel hidden while map is open (map has its own controls)
+              if (!showingMap)
+                TripPanelWidget(
+                  driverId: widget.driver.id,
+                  onOpenMap: () => setState(() => _currentIndex = 3),
+                ),
               Expanded(
                 child: IndexedStack(
                   index: _currentIndex,
-                  children: _tabs,
+                  children: [
+                    DriverCompaniesPage(driver: widget.driver),
+                    DriverInvitationsPage(driver: widget.driver),
+                    DriverProfilePage(driver: widget.driver),
+                    TripMapPage(
+                      onClose: () => setState(() => _currentIndex = 0),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) => setState(() => _currentIndex = index),
-            selectedItemColor: AppColors.primary,
-            unselectedItemColor: AppColors.textSecondary,
-            backgroundColor: AppColors.white,
-            type: BottomNavigationBarType.fixed,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.business_outlined),
-                activeIcon: Icon(Icons.business),
-                label: 'Mis Empresas',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.mail_outline),
-                activeIcon: Icon(Icons.mail),
-                label: 'Invitaciones',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline),
-                activeIcon: Icon(Icons.person),
-                label: 'Mi Perfil',
-              ),
-            ],
-          ),
+          bottomNavigationBar: showingMap
+              ? null
+              : BottomNavigationBar(
+                  currentIndex: _currentIndex,
+                  onTap: (index) => setState(() => _currentIndex = index),
+                  selectedItemColor: AppColors.primary,
+                  unselectedItemColor: AppColors.textSecondary,
+                  backgroundColor: AppColors.white,
+                  type: BottomNavigationBarType.fixed,
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.business_outlined),
+                      activeIcon: Icon(Icons.business),
+                      label: 'Mis Empresas',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.mail_outline),
+                      activeIcon: Icon(Icons.mail),
+                      label: 'Invitaciones',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline),
+                      activeIcon: Icon(Icons.person),
+                      label: 'Mi Perfil',
+                    ),
+                  ],
+                ),
         ),
       ),
     );

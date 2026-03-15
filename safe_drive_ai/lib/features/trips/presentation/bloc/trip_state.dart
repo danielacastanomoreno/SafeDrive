@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../domain/entities/trip_entity.dart';
 
@@ -22,18 +23,36 @@ class TripIdle extends TripState {
 }
 
 class TripActive extends TripState {
-  const TripActive({required this.trip, required this.elapsed});
+  const TripActive({
+    required this.trip,
+    required this.elapsed,
+    this.route = const [],
+  });
 
   final TripEntity trip;
   final Duration elapsed;
 
+  /// GPS points accumulated since the trip started (or since app resumed).
+  final List<LatLng> route;
+
+  TripActive copyWith({
+    TripEntity? trip,
+    Duration? elapsed,
+    List<LatLng>? route,
+  }) {
+    return TripActive(
+      trip: trip ?? this.trip,
+      elapsed: elapsed ?? this.elapsed,
+      route: route ?? this.route,
+    );
+  }
+
   @override
-  List<Object?> get props => [trip, elapsed];
+  List<Object?> get props => [trip, elapsed, route];
 }
 
 class TripEnded extends TripState {
   const TripEnded({required this.trip});
-
   final TripEntity trip;
 
   @override
@@ -42,7 +61,6 @@ class TripEnded extends TripState {
 
 class TripError extends TripState {
   const TripError({required this.message});
-
   final String message;
 
   @override

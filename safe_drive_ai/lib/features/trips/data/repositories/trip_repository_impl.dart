@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
+import '../../domain/entities/route_point_entity.dart';
 import '../../domain/entities/trip_entity.dart';
 import '../../domain/repositories/trip_repository.dart';
 import '../datasources/trip_datasource.dart';
@@ -52,6 +53,31 @@ class TripRepositoryImpl implements TripRepository {
       return Right(trip);
     } on ServerException catch (e) {
       return Left(ServerFailure(message: e.message));
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> saveRoutePoint({
+    required String tripId,
+    required double lat,
+    required double lng,
+  }) async {
+    try {
+      await _datasource.saveRoutePoint(tripId: tripId, lat: lat, lng: lng);
+      return const Right(null);
+    } catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<RoutePointEntity>>> getTripRoute(
+      String tripId) async {
+    try {
+      final points = await _datasource.getTripRoute(tripId);
+      return Right(points);
     } catch (e) {
       return Left(ServerFailure(message: e.toString()));
     }

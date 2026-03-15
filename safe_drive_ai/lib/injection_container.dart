@@ -48,6 +48,8 @@ import 'features/trips/data/repositories/trip_repository_impl.dart';
 import 'features/trips/domain/repositories/trip_repository.dart';
 import 'features/trips/domain/usecases/end_trip_usecase.dart';
 import 'features/trips/domain/usecases/get_active_trip_usecase.dart';
+import 'features/trips/domain/usecases/get_trip_route_usecase.dart';
+import 'features/trips/domain/usecases/save_route_point_usecase.dart';
 import 'features/trips/domain/usecases/start_trip_usecase.dart';
 
 /// Contenedor global de inyección de dependencias de Safe Drive AI.
@@ -190,4 +192,6 @@ void _initTrips() {
   sl.registerLazySingleton(() => StartTripUseCase(sl()));
   sl.registerLazySingleton(() => EndTripUseCase(sl()));
   sl.registerLazySingleton(() => GetActiveTripUseCase(sl()));
+  sl.registerLazySingleton(() => SaveRoutePointUseCase(sl()));
+  sl.registerLazySingleton(() => GetTripRouteUseCase(sl()));
 }

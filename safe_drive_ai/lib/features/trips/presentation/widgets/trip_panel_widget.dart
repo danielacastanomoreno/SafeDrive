@@ -1,5 +1,3 @@
-import 'dart:ui' show FontFeature;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,13 +8,17 @@ import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
 
 /// Panel persistente de viaje mostrado en la parte superior del home del conductor.
-///
-/// - Sin viaje activo: botón "Iniciar Viaje".
-/// - Con viaje activo: indicador "Viaje en curso" + cronómetro + botón "Finalizar Viaje".
 class TripPanelWidget extends StatelessWidget {
-  const TripPanelWidget({super.key, required this.driverId});
+  const TripPanelWidget({
+    super.key,
+    required this.driverId,
+    required this.onOpenMap,
+  });
 
   final String driverId;
+
+  /// Called when the user taps "Ver mapa" while a trip is active.
+  final VoidCallback onOpenMap;
 
   String _formatElapsed(Duration d) {
     final h = d.inHours.toString().padLeft(2, '0');
@@ -78,13 +80,12 @@ class TripPanelWidget extends StatelessWidget {
 
         if (state is TripActive) {
           return _ActiveTripPanel(
-            elapsed: state.elapsed,
             formatted: _formatElapsed(state.elapsed),
             onEnd: () => _onEndPressed(context, state.trip.id),
+            onOpenMap: onOpenMap,
           );
         }
 
-        // TripIdle or TripError
         return _IdleTripPanel(
           onStart: () => _onStartPressed(context),
           error: state is TripError ? state.message : null,
@@ -94,30 +95,23 @@ class TripPanelWidget extends StatelessWidget {
   }
 }
 
-// ── Shell container ──────────────────────────────────────────────────────────
-
 class _PanelShell extends StatelessWidget {
-  const _PanelShell({required this.child, this.color});
-
+  const _PanelShell({required this.child});
   final Widget child;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: color ?? AppColors.primary,
+      color: AppColors.primary,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: child,
     );
   }
 }
 
-// ── Idle (no trip active) ────────────────────────────────────────────────────
-
 class _IdleTripPanel extends StatelessWidget {
   const _IdleTripPanel({required this.onStart, this.error});
-
   final VoidCallback onStart;
   final String? error;
 
@@ -126,14 +120,14 @@ class _IdleTripPanel extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _PanelShell(
+        Container(
+          width: double.infinity,
+          color: AppColors.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Row(
             children: [
-              const Icon(
-                Icons.directions_car,
-                color: AppColors.textOnPrimary,
-                size: 22,
-              ),
+              const Icon(Icons.directions_car,
+                  color: AppColors.textOnPrimary, size: 22),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
@@ -153,17 +147,12 @@ class _IdleTripPanel extends StatelessWidget {
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                      borderRadius: BorderRadius.circular(8)),
                   textStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                      fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -184,27 +173,26 @@ class _IdleTripPanel extends StatelessWidget {
   }
 }
 
-// ── Active trip ──────────────────────────────────────────────────────────────
-
 class _ActiveTripPanel extends StatelessWidget {
   const _ActiveTripPanel({
-    required this.elapsed,
     required this.formatted,
     required this.onEnd,
+    required this.onOpenMap,
   });
 
-  final Duration elapsed;
   final String formatted;
   final VoidCallback onEnd;
+  final VoidCallback onOpenMap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       color: const Color(0xFF1B5E20),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
+          // Status + timer
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,10 +212,9 @@ class _ActiveTripPanel extends StatelessWidget {
                     const Text(
                       'Viaje en curso',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -238,13 +225,25 @@ class _ActiveTripPanel extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    fontFeatures: [FontFeature.tabularFigures()],
                     letterSpacing: 1.5,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
             ),
           ),
+          // Ver mapa button
+          TextButton.icon(
+            onPressed: onOpenMap,
+            icon: const Icon(Icons.map_outlined,
+                color: Colors.white70, size: 18),
+            label: const Text(
+              'Ver mapa',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // End button
           ElevatedButton.icon(
             onPressed: onEnd,
             icon: const Icon(Icons.stop, size: 18),
@@ -253,14 +252,12 @@ class _ActiveTripPanel extends StatelessWidget {
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -268,8 +265,6 @@ class _ActiveTripPanel extends StatelessWidget {
     );
   }
 }
-
-// ── Dialogs ──────────────────────────────────────────────────────────────────
 
 class _NoCameraDialog extends StatelessWidget {
   const _NoCameraDialog();
