@@ -28,24 +28,45 @@ class TripPanelWidget extends StatelessWidget {
   }
 
   Future<void> _onStartPressed(BuildContext context) async {
-    final status = await Permission.camera.status;
-    bool hasCameraPermission = status.isGranted;
+    // ── 1. Permiso de ubicación (GPS) ────────────────────────────────────────
+    bool hasLocation = await Permission.locationWhenInUse.isGranted;
+    if (!hasLocation) {
+      final result = await Permission.locationWhenInUse.request();
+      hasLocation = result.isGranted;
+    }
 
-    if (!hasCameraPermission) {
+    if (!hasLocation) {
       if (!context.mounted) return;
-      final confirmed = await showDialog<bool>(
+      final continueWithout = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _NoLocationDialog(),
+      );
+      if (continueWithout != true) return;
+    }
+
+    // ── 2. Permiso de cámara ─────────────────────────────────────────────────
+    bool hasCamera = await Permission.camera.isGranted;
+    if (!hasCamera) {
+      final result = await Permission.camera.request();
+      hasCamera = result.isGranted;
+    }
+
+    if (!hasCamera) {
+      if (!context.mounted) return;
+      final continueWithout = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (_) => const _NoCameraDialog(),
       );
-      if (confirmed == null || !confirmed) return;
+      if (continueWithout != true) return;
     }
 
     if (!context.mounted) return;
     context.read<TripBloc>().add(
           TripStartRequested(
             driverId: driverId,
-            hasCameraPermission: hasCameraPermission,
+            hasCameraPermission: hasCamera,
           ),
         );
   }
@@ -262,6 +283,43 @@ class _ActiveTripPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NoLocationDialog extends StatelessWidget {
+  const _NoLocationDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: const Row(
+        children: [
+          Icon(Icons.location_off, color: AppColors.warning),
+          SizedBox(width: 8),
+          Text('Sin permiso de GPS'),
+        ],
+      ),
+      content: const Text(
+        'Sin acceso a la ubicación no podremos registrar tu recorrido en el mapa.\n\n'
+        '¿Deseas continuar sin GPS?',
+        style: TextStyle(height: 1.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.warning,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Continuar sin GPS'),
+        ),
+      ],
     );
   }
 }

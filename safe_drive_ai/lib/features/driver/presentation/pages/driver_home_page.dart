@@ -96,11 +96,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
           BlocListener<TripBloc, TripState>(
             listener: (context, state) {
               if (state is TripEnded) {
-                // Navigate back to main tabs if map is showing
-                if (_currentIndex == 3) {
-                  setState(() => _currentIndex = 0);
-                }
+                if (_currentIndex == 3) setState(() => _currentIndex = 0);
                 context.push('/trip/summary', extra: state.trip);
+              } else if (state is TripActive && state.isNewlyStarted) {
+                // Auto-open map the moment a new trip starts
+                setState(() => _currentIndex = 3);
               }
             },
           ),

@@ -123,7 +123,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     result.fold(
       (failure) => emit(TripError(message: failure.message)),
       (trip) {
-        emit(TripActive(trip: trip, elapsed: Duration.zero));
+        emit(TripActive(trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
         _startTimer();
         _startLocationTracking();
       },

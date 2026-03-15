@@ -1,22 +1,22 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-import '../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_colors.dart';
 import '../bloc/trip_bloc.dart';
 import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
 
-/// Mapa en vivo que muestra la posición actual del conductor
-/// y una traza azul del recorrido desde que inició el viaje.
+/// Mapa en vivo con traza azul del recorrido y overlay de cámara frontal.
 ///
-/// Se muestra como 4to tab (oculto) en el [IndexedStack] del [DriverHomePage]
+/// Se muestra como 4to índice en el [IndexedStack] del [DriverHomePage]
 /// para compartir el mismo [TripBloc] sin complicaciones de navegación.
 class TripMapPage extends StatefulWidget {
   const TripMapPage({super.key, required this.onClose});
 
-  /// Called when the user taps the back/close button.
   final VoidCallback onClose;
 
   @override
@@ -24,16 +24,64 @@ class TripMapPage extends StatefulWidget {
 }
 
 class _TripMapPageState extends State<TripMapPage> {
+  // ── Map ───────────────────────────────────────────────────────────────────
   final MapController _mapController = MapController();
   bool _followDriver = true;
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  CameraController? _cameraController;
+  bool _cameraReady = false;
+  bool _cameraOverlayVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    final status = await Permission.camera.status;
+    if (!status.isGranted) return;
+
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) return;
+
+    final front = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+
+    _cameraController = CameraController(
+      front,
+      ResolutionPreset.low,
+      enableAudio: false,
+    );
+
+    try {
+      await _cameraController!.initialize();
+      if (mounted) setState(() => _cameraReady = true);
+    } catch (_) {
+      // Camera not available — continue without it
+    }
+  }
 
   @override
   void dispose() {
     _mapController.dispose();
+    _cameraController?.dispose();
     super.dispose();
   }
 
-  void _onEndPressed(BuildContext context, String tripId) async {
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  String _formatElapsed(Duration d) {
+    final h = d.inHours.toString().padLeft(2, '0');
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
+
+  Future<void> _onEndPressed(BuildContext context, String tripId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -61,35 +109,29 @@ class _TripMapPageState extends State<TripMapPage> {
     context.read<TripBloc>().add(TripEndRequested(tripId: tripId));
   }
 
-  String _formatElapsed(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<TripBloc, TripState>(
       listener: (context, state) {
         if (state is TripActive && state.route.isNotEmpty && _followDriver) {
-          final last = state.route.last;
-          _mapController.move(last, _mapController.camera.zoom);
+          _mapController.move(
+              state.route.last, _mapController.camera.zoom);
         }
       },
       builder: (context, state) {
-        if (state is! TripActive) {
-          return _buildNoTripView();
-        }
+        if (state is! TripActive) return _buildNoTripView();
 
         final route = state.route;
         final currentPosition = route.isNotEmpty ? route.last : null;
+        final topPadding = MediaQuery.of(context).padding.top;
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: Colors.black,
           body: Stack(
             children: [
-              // ── Map ──────────────────────────────────────────────────────────
+              // ── 1. Map (full screen) ──────────────────────────────────────
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -103,13 +145,11 @@ class _TripMapPageState extends State<TripMapPage> {
                   },
                 ),
                 children: [
-                  // OpenStreetMap tiles (free, no API key)
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.bombastik.safedrive',
                   ),
-                  // Route polyline (blue)
                   if (route.length >= 2)
                     PolylineLayer(
                       polylines: [
@@ -121,10 +161,10 @@ class _TripMapPageState extends State<TripMapPage> {
                         ),
                       ],
                     ),
-                  // Start marker (green dot)
                   if (route.isNotEmpty)
                     MarkerLayer(
                       markers: [
+                        // Start marker — green dot
                         Marker(
                           point: route.first,
                           width: 16,
@@ -140,10 +180,10 @@ class _TripMapPageState extends State<TripMapPage> {
                         ),
                       ],
                     ),
-                  // Current position marker (blue navigation icon)
                   if (currentPosition != null)
                     MarkerLayer(
                       markers: [
+                        // Current position — blue navigation icon
                         Marker(
                           point: currentPosition,
                           width: 44,
@@ -156,17 +196,14 @@ class _TripMapPageState extends State<TripMapPage> {
                                   Border.all(color: Colors.white, width: 3),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Colors.black26,
+                                  color: Colors.black38,
                                   blurRadius: 6,
                                   offset: Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.navigation,
-                              color: Colors.white,
-                              size: 22,
-                            ),
+                            child: const Icon(Icons.navigation,
+                                color: Colors.white, size: 22),
                           ),
                         ),
                       ],
@@ -174,20 +211,18 @@ class _TripMapPageState extends State<TripMapPage> {
                 ],
               ),
 
-              // ── Top bar ──────────────────────────────────────────────────────
+              // ── 2. Top bar (back + timer pill) ────────────────────────────
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                   child: Row(
                     children: [
-                      // Back button
                       _MapButton(
                         icon: Icons.arrow_back,
                         onTap: widget.onClose,
                         tooltip: 'Volver',
                       ),
                       const SizedBox(width: 8),
-                      // Trip timer pill
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -197,10 +232,8 @@ class _TripMapPageState extends State<TripMapPage> {
                             borderRadius: BorderRadius.circular(30),
                             boxShadow: const [
                               BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
+                                  color: Colors.black38, blurRadius: 6,
+                                  offset: Offset(0, 2))
                             ],
                           ),
                           child: Row(
@@ -215,14 +248,11 @@ class _TripMapPageState extends State<TripMapPage> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Viaje en curso  ',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                              const Text('Viaje en curso  ',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500)),
                               Text(
                                 _formatElapsed(state.elapsed),
                                 style: const TextStyle(
@@ -241,7 +271,26 @@ class _TripMapPageState extends State<TripMapPage> {
                 ),
               ),
 
-              // ── Bottom controls ──────────────────────────────────────────────
+              // ── 3. Camera overlay (top-right, below top bar) ──────────────
+              if (_cameraReady && _cameraController != null)
+                Positioned(
+                  top: topPadding + 80,
+                  right: 12,
+                  child: _cameraOverlayVisible
+                      ? _CameraOverlay(
+                          controller: _cameraController!,
+                          onClose: () =>
+                              setState(() => _cameraOverlayVisible = false),
+                        )
+                      : _MapButton(
+                          icon: Icons.videocam_outlined,
+                          onTap: () =>
+                              setState(() => _cameraOverlayVisible = true),
+                          tooltip: 'Mostrar cámara',
+                        ),
+                ),
+
+              // ── 4. Bottom controls ────────────────────────────────────────
               Positioned(
                 bottom: 24,
                 left: 16,
@@ -249,7 +298,6 @@ class _TripMapPageState extends State<TripMapPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Re-center button (visible only when user has panned away)
                     if (!_followDriver)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -264,7 +312,6 @@ class _TripMapPageState extends State<TripMapPage> {
                           tooltip: 'Centrar en mi posición',
                         ),
                       ),
-                    // End trip button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -272,18 +319,15 @@ class _TripMapPageState extends State<TripMapPage> {
                         onPressed: () =>
                             _onEndPressed(context, state.trip.id),
                         icon: const Icon(Icons.stop),
-                        label: const Text(
-                          'Finalizar Viaje',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
+                        label: const Text('Finalizar Viaje',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.error,
                           foregroundColor: Colors.white,
                           elevation: 2,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -312,10 +356,8 @@ class _TripMapPageState extends State<TripMapPage> {
             ),
             const Expanded(
               child: Center(
-                child: Text(
-                  'No hay un viaje activo.',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
+                child: Text('No hay un viaje activo.',
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
             ),
           ],
@@ -324,6 +366,82 @@ class _TripMapPageState extends State<TripMapPage> {
     );
   }
 }
+
+// ── Camera overlay widget ─────────────────────────────────────────────────────
+
+class _CameraOverlay extends StatelessWidget {
+  const _CameraOverlay({
+    required this.controller,
+    required this.onClose,
+  });
+
+  final CameraController controller;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 110,
+      height: 155,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [
+          BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 3))
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Camera preview (mirrored like a selfie)
+          Transform.scale(
+            scaleX: -1, // mirror horizontally for selfie effect
+            child: CameraPreview(controller),
+          ),
+          // Close button (top-right corner)
+          Positioned(
+            top: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: onClose,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 14),
+              ),
+            ),
+          ),
+          // "Cámara" label at bottom
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: Colors.black38,
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: const Text(
+                'Cámara frontal',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared map button ─────────────────────────────────────────────────────────
 
 class _MapButton extends StatelessWidget {
   const _MapButton({
