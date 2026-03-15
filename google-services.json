@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "249112927184",
+    "firebase_url": "https://bombastik-e516e-default-rtdb.firebaseio.com",
+    "project_id": "bombastik-e516e",
+    "storage_bucket": "bombastik-e516e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:249112927184:android:b074ea7821031ad4cb77d5",
+        "android_client_info": {
+          "package_name": "com.bombastik.safedrive"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBst_PyenpadDAXIgUrWPluTJR8s-GExyA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,19 @@
+# Secretos — NUNCA subir al repo
+serviceAccountKey.json
+safe_drive_ai/android/app/google-services.json
+safe_drive_ai/ios/Runner/GoogleService-Info.plist
+*.env
+.env*
+
+# Scripts locales
+seed_auth.js
+seed.js
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
