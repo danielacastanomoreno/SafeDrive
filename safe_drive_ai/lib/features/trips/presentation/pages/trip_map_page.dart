@@ -40,11 +40,22 @@ class _TripMapPageState extends State<TripMapPage> {
   }
 
   Future<void> _initCamera() async {
+    if (_cameraReady) return; // already running
+
     final status = await Permission.camera.status;
     if (!status.isGranted) return;
 
-    final cameras = await availableCameras();
+    List<CameraDescription> cameras;
+    try {
+      cameras = await availableCameras();
+    } catch (_) {
+      return;
+    }
     if (cameras.isEmpty) return;
+
+    // Dispose previous controller if any
+    await _cameraController?.dispose();
+    _cameraController = null;
 
     final front = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
@@ -61,7 +72,8 @@ class _TripMapPageState extends State<TripMapPage> {
       await _cameraController!.initialize();
       if (mounted) setState(() => _cameraReady = true);
     } catch (_) {
-      // Camera not available — continue without it
+      await _cameraController?.dispose();
+      _cameraController = null;
     }
   }
 
@@ -115,6 +127,10 @@ class _TripMapPageState extends State<TripMapPage> {
   Widget build(BuildContext context) {
     return BlocConsumer<TripBloc, TripState>(
       listener: (context, state) {
+        if (state is TripActive && state.isNewlyStarted) {
+          // Permission was just granted moments ago — try camera now
+          _initCamera();
+        }
         if (state is TripActive && state.route.isNotEmpty && _followDriver) {
           _mapController.move(
               state.route.last, _mapController.camera.zoom);
