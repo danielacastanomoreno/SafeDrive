@@ -23,6 +23,15 @@ abstract class AuthRemoteDatasource {
     String representativeName,
   );
 
+  /// Registra un conductor independiente en Firebase Auth y Firestore.
+  /// Lanza [AuthException] si la cédula ya existe en Firestore.
+  Future<UserModel> registerDriver(
+    String name,
+    String cedula,
+    String email,
+    String password,
+  );
+
   /// Cierra la sesión activa en Firebase Auth.
   Future<void> logout();
 

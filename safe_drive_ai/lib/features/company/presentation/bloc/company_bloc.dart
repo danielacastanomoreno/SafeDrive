@@ -7,6 +7,8 @@ import '../../domain/usecases/register_driver_by_company_usecase.dart';
 import '../../domain/usecases/send_invitation_usecase.dart';
 import '../../domain/usecases/unlink_driver_usecase.dart';
 import '../../domain/usecases/update_company_profile_usecase.dart';
+import '../../domain/usecases/get_pending_trips_usecase.dart';
+import '../../domain/usecases/approve_trip_closure_usecase.dart';
 import 'company_event.dart';
 import 'company_state.dart';
 
@@ -22,6 +24,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     required CancelInvitationUseCase cancelInvitationUseCase,
     required UpdateCompanyProfileUseCase updateCompanyProfileUseCase,
     required RegisterDriverByCompanyUseCase registerDriverByCompanyUseCase,
+    required GetPendingTripsUseCase getPendingTripsUseCase,
+    required ApproveTripClosureUseCase approveTripClosureUseCase,
   })  : _getCompanyDriversUseCase = getCompanyDriversUseCase,
         _unlinkDriverUseCase = unlinkDriverUseCase,
         _sendInvitationUseCase = sendInvitationUseCase,
@@ -29,6 +33,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
         _cancelInvitationUseCase = cancelInvitationUseCase,
         _updateCompanyProfileUseCase = updateCompanyProfileUseCase,
         _registerDriverByCompanyUseCase = registerDriverByCompanyUseCase,
+        _getPendingTripsUseCase = getPendingTripsUseCase,
+        _approveTripClosureUseCase = approveTripClosureUseCase,
         super(const CompanyInitial()) {
     on<CompanyDriversRequested>(_onDriversRequested);
     on<CompanyDriverUnlinkRequested>(_onDriverUnlinkRequested);
@@ -38,6 +44,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     on<CompanyProfileRequested>(_onProfileRequested);
     on<CompanyProfileUpdateRequested>(_onProfileUpdateRequested);
     on<CompanyDriverRegisterRequested>(_onDriverRegisterRequested);
+    on<CompanyPendingTripsRequested>(_onPendingTripsRequested);
+    on<CompanyTripClosureApproved>(_onTripClosureApproved);
   }
 
   final GetCompanyDriversUseCase _getCompanyDriversUseCase;
@@ -47,6 +55,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
   final CancelInvitationUseCase _cancelInvitationUseCase;
   final UpdateCompanyProfileUseCase _updateCompanyProfileUseCase;
   final RegisterDriverByCompanyUseCase _registerDriverByCompanyUseCase;
+  final GetPendingTripsUseCase _getPendingTripsUseCase;
+  final ApproveTripClosureUseCase _approveTripClosureUseCase;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -145,8 +155,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
 
     result.fold(
       (failure) => emit(CompanyError(message: failure.message)),
-      (invitations) =>
-          emit(CompanyInvitationsLoaded(invitations: invitations)),
+      (invitations) => emit(CompanyInvitationsLoaded(invitations: invitations)),
     );
   }
 
@@ -191,7 +200,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     // confirmar que el estado local es el más reciente.
     // Como no hay un usecase de "get profile" puro (ya existe en auth),
     // emitimos error si no tenemos datos — la página provee la entidad inicial.
-    emit(const CompanyError(message: 'Use el perfil provisto en la navegación.'));
+    emit(const CompanyError(
+        message: 'Use el perfil provisto en la navegación.'));
   }
 
   Future<void> _onProfileUpdateRequested(
@@ -251,4 +261,45 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
       },
     );
   }
+
+  Future<void> _onPendingTripsRequested(
+    CompanyPendingTripsRequested event,
+    Emitter<CompanyState> emit,
+  ) async {
+    emit(const CompanyLoading());
+
+    final result = await _getPendingTripsUseCase(event.companyId);
+
+    result.fold(
+      (failure) => emit(CompanyError(message: failure.message)),
+      (pendingTrips) => emit(CompanyPendingTripsLoaded(pendingTrips: pendingTrips)),
+    );
+  }
+
+  Future<void> _onTripClosureApproved(
+    CompanyTripClosureApproved event,
+    Emitter<CompanyState> emit,
+  ) async {
+    emit(const CompanyLoading());
+
+    final result = await _approveTripClosureUseCase(event.tripId);
+
+    await result.fold(
+      (failure) async => emit(CompanyError(message: failure.message)),
+      (_) async {
+        emit(
+          const CompanyActionSuccess(
+            message: 'Cierre de viaje aprobado correctamente.',
+          ),
+        );
+        // Recargar la lista de viajes pendientes
+        final pendingResult = await _getPendingTripsUseCase(event.companyId);
+        pendingResult.fold(
+          (failure) => emit(CompanyError(message: failure.message)),
+          (pendingTrips) => emit(CompanyPendingTripsLoaded(pendingTrips: pendingTrips)),
+        );
+      },
+    );
+  }
 }
+

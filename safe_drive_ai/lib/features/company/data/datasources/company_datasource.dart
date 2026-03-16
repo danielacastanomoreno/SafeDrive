@@ -1,6 +1,7 @@
 import '../../../auth/data/models/company_link_model.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../../auth/domain/entities/company_entity.dart';
+import '../../../trips/data/models/trip_model.dart';
 import '../models/invitation_model.dart';
 
 /// Contrato de la fuente de datos remota para el feature de empresa.
@@ -50,4 +51,11 @@ abstract class CompanyDatasource {
     required String phone,
     required String cargo,
   });
+
+  /// Obtiene los viajes pendientes de aprobación de los conductores de esta empresa
+  Future<List<TripModel>> getPendingTrips(String companyId);
+
+  /// Aprueba el cierre remoto de un viaje
+  Future<void> approveTripClosure(String tripId);
 }
+

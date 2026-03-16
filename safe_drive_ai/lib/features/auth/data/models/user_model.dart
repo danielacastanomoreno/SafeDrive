@@ -18,7 +18,9 @@ class UserModel extends UserEntity {
       name: map['name'] as String,
       cedula: map['cedula'] as String,
       email: map['email'] as String,
-      role: (map['role'] as String) == 'driver' ? UserRole.driver : UserRole.company,
+      role: (map['role'] as String) == 'driver'
+          ? UserRole.driver
+          : UserRole.company,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
     );
   }

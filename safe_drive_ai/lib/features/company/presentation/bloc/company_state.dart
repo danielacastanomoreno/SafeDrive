@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../../auth/domain/entities/company_entity.dart';
 import '../../../auth/domain/entities/company_link_entity.dart';
+import '../../../trips/domain/entities/trip_entity.dart';
 import '../../domain/entities/invitation_entity.dart';
 
 /// Contrato base para todos los estados del BLoC de empresa.
@@ -71,3 +72,14 @@ class CompanyError extends CompanyState {
   @override
   List<Object?> get props => [message];
 }
+
+/// Lista de viajes pendientes de cierre cargada correctamente.
+class CompanyPendingTripsLoaded extends CompanyState {
+  const CompanyPendingTripsLoaded({required this.pendingTrips});
+
+  final List<TripEntity> pendingTrips;
+
+  @override
+  List<Object?> get props => [pendingTrips];
+}
+

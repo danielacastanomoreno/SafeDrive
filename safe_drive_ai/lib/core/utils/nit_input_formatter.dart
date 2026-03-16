@@ -15,9 +15,8 @@ class NitInputFormatter extends TextInputFormatter {
     final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
 
     // Máximo 10 dígitos (9 base + 1 verificación)
-    final limited = digitsOnly.length > 10
-        ? digitsOnly.substring(0, 10)
-        : digitsOnly;
+    final limited =
+        digitsOnly.length > 10 ? digitsOnly.substring(0, 10) : digitsOnly;
 
     // Insertar guion después del dígito 9
     final String formatted;

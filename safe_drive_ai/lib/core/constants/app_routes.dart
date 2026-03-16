@@ -6,10 +6,14 @@ import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/auth/presentation/pages/company_login_page.dart';
 import '../../features/auth/presentation/pages/company_register_page.dart';
 import '../../features/auth/presentation/pages/driver_login_page.dart';
+import '../../features/auth/presentation/pages/driver_register_page.dart';
 import '../../features/auth/presentation/pages/forgot_password_page.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
 import '../../features/auth/presentation/pages/select_company_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
+import '../../features/auth/domain/entities/user_entity.dart';
+import '../../features/auth/domain/entities/company_link_entity.dart';
+import '../../features/company/presentation/pages/company_driver_detail_page.dart';
 import '../../features/company/presentation/pages/company_home_page.dart';
 import '../../features/company/presentation/pages/register_driver_page.dart';
 import '../../features/driver/presentation/pages/driver_home_page.dart';
@@ -39,6 +43,10 @@ class AppRouter {
       GoRoute(
         path: '/driver/login',
         builder: (context, state) => const DriverLoginPage(),
+      ),
+      GoRoute(
+        path: '/driver/register',
+        builder: (context, state) => const DriverRegisterPage(),
       ),
       GoRoute(
         path: '/company/login',
@@ -87,6 +95,17 @@ class AppRouter {
           return RegisterDriverPage(
             companyId: extra['companyId']!,
             companyName: extra['companyName']!,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/company/driver-detail',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          if (extra == null) return const SizedBox.shrink();
+          return CompanyDriverDetailPage(
+            link: extra['link'] as CompanyLinkEntity,
+            profile: extra['profile'] as UserEntity,
           );
         },
       ),

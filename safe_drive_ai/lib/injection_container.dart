@@ -17,6 +17,7 @@ import 'features/auth/domain/usecases/login_company_usecase.dart';
 import 'features/auth/domain/usecases/login_driver_usecase.dart';
 import 'features/auth/domain/usecases/logout_usecase.dart';
 import 'features/auth/domain/usecases/register_company_usecase.dart';
+import 'features/auth/domain/usecases/register_driver_usecase.dart';
 import 'features/auth/domain/usecases/send_password_reset_usecase.dart';
 import 'features/auth/domain/usecases/set_active_company_usecase.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
@@ -32,6 +33,8 @@ import 'features/company/domain/usecases/register_driver_by_company_usecase.dart
 import 'features/company/domain/usecases/send_invitation_usecase.dart';
 import 'features/company/domain/usecases/unlink_driver_usecase.dart';
 import 'features/company/domain/usecases/update_company_profile_usecase.dart';
+import 'features/company/domain/usecases/get_pending_trips_usecase.dart';
+import 'features/company/domain/usecases/approve_trip_closure_usecase.dart';
 import 'features/company/presentation/bloc/company_bloc.dart';
 import 'features/driver/data/datasources/driver_datasource.dart';
 import 'features/driver/data/datasources/driver_datasource_impl.dart';
@@ -51,6 +54,12 @@ import 'features/trips/domain/usecases/get_active_trip_usecase.dart';
 import 'features/trips/domain/usecases/get_trip_route_usecase.dart';
 import 'features/trips/domain/usecases/save_route_point_usecase.dart';
 import 'features/trips/domain/usecases/start_trip_usecase.dart';
+import 'features/trips/domain/usecases/request_remote_closure_usecase.dart';
+import 'features/trips/domain/usecases/listen_to_approval_stream_usecase.dart';
+import 'features/trips/domain/usecases/verify_manual_pin_usecase.dart';
+import 'features/trips/domain/usecases/stop_monitoring_and_finalize_usecase.dart';
+import 'features/trips/domain/usecases/generate_and_store_pin_usecase.dart';
+import 'features/trips/domain/usecases/get_driver_trips_usecase.dart';
 
 /// Contenedor global de inyección de dependencias de Safe Drive AI.
 ///
@@ -99,6 +108,7 @@ void _initAuth() {
   sl.registerLazySingleton(() => LoginDriverUseCase(sl()));
   sl.registerLazySingleton(() => LoginCompanyUseCase(sl()));
   sl.registerLazySingleton(() => RegisterCompanyUseCase(sl()));
+  sl.registerLazySingleton(() => RegisterDriverUseCase(sl()));
   sl.registerLazySingleton(() => LogoutUseCase(sl()));
   sl.registerLazySingleton(() => SendPasswordResetUseCase(sl()));
   sl.registerLazySingleton(() => GetDriverCompaniesUseCase(sl()));
@@ -114,6 +124,7 @@ void _initAuth() {
       loginDriverUseCase: sl(),
       loginCompanyUseCase: sl(),
       registerCompanyUseCase: sl(),
+      registerDriverUseCase: sl(),
       logoutUseCase: sl(),
       sendPasswordResetUseCase: sl(),
       getDriverCompaniesUseCase: sl(),
@@ -126,7 +137,7 @@ void _initAuth() {
 void _initCompany() {
   // Datasource
   sl.registerLazySingleton<CompanyDatasource>(
-    () => CompanyDatasourceImpl(firestore: sl(), firebaseAuth: sl()),
+    () => CompanyDatasourceImpl(firestore: sl()),
   );
 
   // Repository
@@ -143,6 +154,8 @@ void _initCompany() {
   sl.registerLazySingleton(() => CancelInvitationUseCase(sl()));
   sl.registerLazySingleton(() => UpdateCompanyProfileUseCase(sl()));
   sl.registerLazySingleton(() => RegisterDriverByCompanyUseCase(sl()));
+  sl.registerLazySingleton(() => GetPendingTripsUseCase(sl()));
+  sl.registerLazySingleton(() => ApproveTripClosureUseCase(sl()));
 
   // BLoC — factory para instancia fresca en cada CompanyHomePage
   sl.registerFactory(
@@ -154,6 +167,8 @@ void _initCompany() {
       cancelInvitationUseCase: sl(),
       updateCompanyProfileUseCase: sl(),
       registerDriverByCompanyUseCase: sl(),
+      getPendingTripsUseCase: sl(),
+      approveTripClosureUseCase: sl(),
     ),
   );
 }
@@ -194,4 +209,12 @@ void _initTrips() {
   sl.registerLazySingleton(() => GetActiveTripUseCase(sl()));
   sl.registerLazySingleton(() => SaveRoutePointUseCase(sl()));
   sl.registerLazySingleton(() => GetTripRouteUseCase(sl()));
+  sl.registerLazySingleton(() => GetDriverTripsUseCase(sl()));
+
+  // New Closure UseCases
+  sl.registerLazySingleton(() => RequestRemoteClosureUseCase(sl()));
+  sl.registerLazySingleton(() => ListenToApprovalStreamUseCase(sl()));
+  sl.registerLazySingleton(() => VerifyManualPinUseCase(sl()));
+  sl.registerLazySingleton(() => StopMonitoringAndFinalizeUseCase(sl()));
+  sl.registerLazySingleton(() => GenerateAndStorePinUseCase(sl()));
 }

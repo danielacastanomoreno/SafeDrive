@@ -16,4 +16,12 @@ abstract class TripDatasource {
   });
 
   Future<List<RoutePointModel>> getTripRoute(String tripId);
+  Future<List<TripModel>> getDriverTrips(String driverId);
+
+  // Cierre de viaje
+  Future<void> requestRemoteClosure(String tripId);
+  Stream<TripModel> listenToApprovalStream(String tripId);
+  Future<String?> getEndTripPin();
+  Future<void> setEndTripPin(String pin);
+  Future<void> finalizeLocalTrip();
 }

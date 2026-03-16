@@ -12,6 +12,11 @@ import '../../../trips/domain/usecases/end_trip_usecase.dart';
 import '../../../trips/domain/usecases/get_active_trip_usecase.dart';
 import '../../../trips/domain/usecases/save_route_point_usecase.dart';
 import '../../../trips/domain/usecases/start_trip_usecase.dart';
+import '../../../trips/domain/usecases/request_remote_closure_usecase.dart';
+import '../../../trips/domain/usecases/listen_to_approval_stream_usecase.dart';
+import '../../../trips/domain/usecases/verify_manual_pin_usecase.dart';
+import '../../../trips/domain/usecases/stop_monitoring_and_finalize_usecase.dart';
+import '../../../trips/domain/usecases/generate_and_store_pin_usecase.dart';
 import '../../../trips/presentation/bloc/trip_bloc.dart';
 import '../../../trips/presentation/bloc/trip_event.dart';
 import '../../../trips/presentation/bloc/trip_state.dart';
@@ -57,6 +62,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
       endTripUseCase: sl<EndTripUseCase>(),
       getActiveTripUseCase: sl<GetActiveTripUseCase>(),
       saveRoutePointUseCase: sl<SaveRoutePointUseCase>(),
+      requestRemoteClosureUseCase: sl<RequestRemoteClosureUseCase>(),
+      listenToApprovalStreamUseCase: sl<ListenToApprovalStreamUseCase>(),
+      verifyManualPinUseCase: sl<VerifyManualPinUseCase>(),
+      stopMonitoringAndFinalizeUseCase: sl<StopMonitoringAndFinalizeUseCase>(),
+      generateAndStorePinUseCase: sl<GenerateAndStorePinUseCase>(),
     )..add(TripCheckActiveRequested(driverId: widget.driver.id));
   }
 
@@ -98,6 +108,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
               if (state is TripEnded) {
                 if (_currentIndex == 3) setState(() => _currentIndex = 0);
                 context.push('/trip/summary', extra: state.trip);
+              } else if (state is TripFinalizedSuccess) {
+                // Remote/PIN closure succeeded - navigate to summary with minimal data
+                // The trip is already finalized in Firestore
+                if (_currentIndex == 3) setState(() => _currentIndex = 0);
+                // Navigate with null - summary page will handle it
+                context.push('/trip/summary', extra: null);
               } else if (state is TripActive && state.isNewlyStarted) {
                 // Auto-open map the moment a new trip starts
                 setState(() => _currentIndex = 3);

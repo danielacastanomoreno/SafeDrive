@@ -153,7 +153,8 @@ class DriverBloc extends Bloc<DriverEvent, DriverState> {
       (failure) => emit(DriverError(message: failure.message)),
       (driver) {
         emit(
-          const DriverActionSuccess(message: 'Perfil actualizado correctamente'),
+          const DriverActionSuccess(
+              message: 'Perfil actualizado correctamente'),
         );
         emit(DriverProfileLoaded(driver: driver));
       },

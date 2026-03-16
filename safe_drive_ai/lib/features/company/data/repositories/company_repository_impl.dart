@@ -5,6 +5,7 @@ import '../../../../core/errors/failures.dart';
 import '../../../auth/domain/entities/company_entity.dart';
 import '../../../auth/domain/entities/company_link_entity.dart';
 import '../../../auth/domain/entities/user_entity.dart';
+import '../../../trips/domain/entities/trip_entity.dart';
 import '../../domain/entities/invitation_entity.dart';
 import '../../domain/repositories/company_repository.dart';
 import '../datasources/company_datasource.dart';
@@ -79,7 +80,9 @@ class CompanyRepositoryImpl implements CompanyRepository {
       return const Right(null);
     } on DriverNotFoundException {
       return const Left(
-        DocumentNotFoundFailure(),
+        ValidationFailure(
+            message:
+                'No existe ningún conductor registrado con esa cédula. Debes registrarlo primero.'),
       );
     } on InvitationAlreadyExistsException {
       return const Left(InvitationAlreadyExistsFailure());
@@ -171,4 +174,31 @@ class CompanyRepositoryImpl implements CompanyRepository {
       return const Left(ServerFailure());
     }
   }
+
+  // ── Aprobaciones de Viajes ───────────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, List<TripEntity>>> getPendingTrips(String companyId) async {
+    try {
+      final trips = await _datasource.getPendingTrips(companyId);
+      return Right(trips);
+    } on FirestoreException catch (e) {
+      return Left(FirestoreFailure(message: e.message));
+    } catch (_) {
+      return const Left(ServerFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> approveTripClosure(String tripId) async {
+    try {
+      await _datasource.approveTripClosure(tripId);
+      return const Right(null);
+    } on FirestoreException catch (e) {
+      return Left(FirestoreFailure(message: e.message));
+    } catch (_) {
+      return const Left(ServerFailure());
+    }
+  }
 }
+

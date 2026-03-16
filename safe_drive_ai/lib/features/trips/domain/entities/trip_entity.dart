@@ -10,6 +10,9 @@ class TripEntity extends Equatable {
     required this.hasCameraPermission,
     required this.status,
     this.endTime,
+    this.endTripPin,
+    this.closureRequestedAt,
+    this.isClosureApproved = false,
   });
 
   final String id;
@@ -18,6 +21,9 @@ class TripEntity extends Equatable {
   final DateTime? endTime;
   final bool hasCameraPermission;
   final TripStatus status;
+  final String? endTripPin;
+  final DateTime? closureRequestedAt;
+  final bool isClosureApproved;
 
   Duration get elapsed {
     final end = endTime ?? DateTime.now();
@@ -25,6 +31,15 @@ class TripEntity extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [id, driverId, startTime, endTime, hasCameraPermission, status];
+  List<Object?> get props => [
+        id,
+        driverId,
+        startTime,
+        endTime,
+        hasCameraPermission,
+        status,
+        endTripPin,
+        closureRequestedAt,
+        isClosureApproved,
+      ];
 }

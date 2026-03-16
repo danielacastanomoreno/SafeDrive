@@ -116,7 +116,9 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(color: AppColors.textPrimary),
                     onChanged: (val) {
-                      final currentNit = val.length == 9 && _selectedDv != null ? '$val-$_selectedDv' : null;
+                      final currentNit = val.length == 9 && _selectedDv != null
+                          ? '$val-$_selectedDv'
+                          : null;
                       field.didChange(currentNit);
                     },
                     decoration: _decoration('NIT (9 dígitos)').copyWith(
@@ -131,8 +133,8 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                       ),
                       focusedErrorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(_borderRadius),
-                        borderSide:
-                            const BorderSide(color: AppColors.error, width: 1.5),
+                        borderSide: const BorderSide(
+                            color: AppColors.error, width: 1.5),
                       ),
                     ),
                   ),
@@ -156,7 +158,8 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                     decoration: _decoration('DV').copyWith(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
-                    icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+                    icon: const Icon(Icons.arrow_drop_down,
+                        color: AppColors.textSecondary),
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 16,
@@ -174,7 +177,9 @@ class _NitFieldWidgetState extends State<NitFieldWidget> {
                             setState(() => _selectedDv = value);
                             _notify();
                             final val = _digitsController.text;
-                            field.didChange(val.length == 9 && value != null ? '$val-$value' : null);
+                            field.didChange(val.length == 9 && value != null
+                                ? '$val-$value'
+                                : null);
                           }
                         : null,
                   ),

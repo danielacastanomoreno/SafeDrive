@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../../../core/constants/app_colors.dart';
 import '../../../auth/domain/entities/company_link_entity.dart';
 import '../bloc/company_bloc.dart';
@@ -143,12 +145,15 @@ class _CompanyDriversPageState extends State<CompanyDriversPage> {
                   key: ValueKey(link.id),
                   link: link,
                   companyId: widget.companyId,
-                  // El nombre y cedula se muestran con el driverId como fallback.
-                  // Para enriquecer con datos reales se necesitaria un join
-                  // adicional; la empresa ve el cargo y telefono que ella misma
-                  // registro en el vinculo.
-                  driverName: 'Conductor vinculado',
-                  driverCedula: link.driverId.substring(0, 8),
+                  onTap: (profile) {
+                    context.push(
+                      '/company/driver-detail',
+                      extra: {
+                        'link': link,
+                        'profile': profile,
+                      },
+                    );
+                  },
                 );
               },
             ),

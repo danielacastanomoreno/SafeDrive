@@ -21,9 +21,8 @@ class GetCurrentDriverUseCase extends UseCase<UserEntity, NoParams> {
     final result = await _repository.getCurrentDriver();
     return result.fold(
       Left.new,
-      (user) => user != null
-          ? Right(user)
-          : const Left(NotAuthenticatedFailure()),
+      (user) =>
+          user != null ? Right(user) : const Left(NotAuthenticatedFailure()),
     );
   }
 }

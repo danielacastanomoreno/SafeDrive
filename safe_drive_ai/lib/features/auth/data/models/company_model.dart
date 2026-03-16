@@ -21,7 +21,9 @@ class CompanyModel extends CompanyEntity {
       nit: map['nit'] as String,
       email: map['email'] as String,
       representativeName: map['representativeName'] as String,
-      role: (map['role'] as String) == 'driver' ? UserRole.driver : UserRole.company,
+      role: (map['role'] as String) == 'driver'
+          ? UserRole.driver
+          : UserRole.company,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
     );
   }

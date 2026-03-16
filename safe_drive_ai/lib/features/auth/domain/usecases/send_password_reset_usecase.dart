@@ -6,8 +6,7 @@ import '../../../../core/usecases/usecase.dart';
 import '../repositories/auth_repository.dart';
 
 /// Envía un correo de recuperación de contraseña al email indicado.
-class SendPasswordResetUseCase
-    extends UseCase<void, SendPasswordResetParams> {
+class SendPasswordResetUseCase extends UseCase<void, SendPasswordResetParams> {
   const SendPasswordResetUseCase(this._repository);
 
   final AuthRepository _repository;

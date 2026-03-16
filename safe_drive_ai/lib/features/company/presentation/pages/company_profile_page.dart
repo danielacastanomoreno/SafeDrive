@@ -252,8 +252,7 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: const Text(
                           'Cancelar',
@@ -272,8 +271,7 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
                         ),
                         child: isLoading
@@ -436,8 +434,7 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
       ),
       filled: true,
       fillColor: AppColors.background,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     );
   }
 }

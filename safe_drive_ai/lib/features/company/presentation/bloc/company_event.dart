@@ -143,3 +143,28 @@ class CompanyDriverRegisterRequested extends CompanyEvent {
         cargo,
       ];
 }
+
+/// Solicita obtener la lista de viajes pendientes de aprobación de cierre.
+class CompanyPendingTripsRequested extends CompanyEvent {
+  const CompanyPendingTripsRequested({required this.companyId});
+
+  final String companyId;
+
+  @override
+  List<Object?> get props => [companyId];
+}
+
+/// Solicita aprobar el cierre de un viaje.
+class CompanyTripClosureApproved extends CompanyEvent {
+  const CompanyTripClosureApproved({
+    required this.tripId,
+    required this.companyId,
+  });
+
+  final String tripId;
+  final String companyId; // Para poder recargar la lista luego de aprobar
+
+  @override
+  List<Object?> get props => [tripId, companyId];
+}
+

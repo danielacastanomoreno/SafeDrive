@@ -7,18 +7,16 @@ import '../../../auth/data/models/company_link_model.dart';
 import '../../../auth/data/models/company_model.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../../auth/domain/entities/company_entity.dart';
+import '../../../trips/data/models/trip_model.dart';
 import '../models/invitation_model.dart';
 import 'company_datasource.dart';
 
 class CompanyDatasourceImpl implements CompanyDatasource {
   const CompanyDatasourceImpl({
     required FirebaseFirestore firestore,
-    required FirebaseAuth firebaseAuth,
-  })  : _firestore = firestore,
-        _auth = firebaseAuth;
+  }) : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
 
   // ── Conductores ─────────────────────────────────────────────────────────────
 
@@ -83,7 +81,10 @@ class CompanyDatasourceImpl implements CompanyDatasource {
       throw const CedulaAlreadyRegisteredException();
     }
 
-    // 2. Crear usuario en Firebase Auth con instancia secundaria para no
+    // 2. Generar contraseña temporal segura
+    final tempPassword = 'SD${DateTime.now().millisecondsSinceEpoch}!Ab';
+
+    // 3. Crear usuario en Firebase Auth con instancia secundaria para no
     //    cerrar la sesión activa de la empresa.
     final secondaryApp = await Firebase.initializeApp(
       name: 'secondary_${DateTime.now().millisecondsSinceEpoch}',
@@ -91,14 +92,16 @@ class CompanyDatasourceImpl implements CompanyDatasource {
     );
     final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
 
+    String? driverUid;
     try {
+      // Crear usuario con contraseña temporal en la instancia secundaria
       final credential = await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
-        password: 'TmpSD${DateTime.now().millisecondsSinceEpoch}!',
+        password: tempPassword,
       );
-      final driverUid = credential.user!.uid;
+      driverUid = credential.user!.uid;
 
-      // 3. Crear documento en `users`
+      // 4. Crear documento en `users`
       await _firestore.collection('users').doc(driverUid).set({
         'name': name,
         'cedula': cedula,
@@ -107,7 +110,7 @@ class CompanyDatasourceImpl implements CompanyDatasource {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 4. Crear vínculo en `company_drivers`
+      // 5. Crear vínculo en `company_drivers`
       await _firestore.collection('company_drivers').add({
         'companyId': companyId,
         'driverId': driverUid,
@@ -118,16 +121,17 @@ class CompanyDatasourceImpl implements CompanyDatasource {
         'unlinkedAt': null,
       });
 
-      // 5. Enviar correo de restablecimiento con el auth PRIMARIO para que
-      //    el conductor pueda establecer su propia contraseña.
-      await _auth.sendPasswordResetEmail(email: email);
+      // 6. Enviar correo de restablecimiento de contraseña DESPUÉS de crear
+      //    el usuario usando la instancia secundaria donde se creó.
+      await secondaryAuth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
         throw const EmailAlreadyRegisteredException();
       }
+      // Re-lanzar otras excepciones de Firebase
       rethrow;
     } finally {
-      // 6. Siempre eliminar la instancia secundaria para liberar recursos.
+      // 7. Siempre eliminar la instancia secundaria para liberar recursos.
       await secondaryApp.delete();
     }
   }
@@ -231,8 +235,7 @@ class CompanyDatasourceImpl implements CompanyDatasource {
       'representativeName': representativeName,
     });
 
-    final doc =
-        await _firestore.collection('companies').doc(companyId).get();
+    final doc = await _firestore.collection('companies').doc(companyId).get();
     if (!doc.exists) {
       throw DocumentNotFoundException(
         'No se encontró el perfil de la empresa $companyId.',
@@ -240,4 +243,63 @@ class CompanyDatasourceImpl implements CompanyDatasource {
     }
     return CompanyModel.fromMap(doc.id, doc.data()!);
   }
+
+  // ── Aprobaciones de Viajes ───────────────────────────────────────────────────
+
+  @override
+  Future<List<TripModel>> getPendingTrips(String companyId) async {
+    // 1. Obtener todos los conductores vinculados y activos de la empresa
+    final driversQuery = await _firestore
+        .collection('company_drivers')
+        .where('companyId', isEqualTo: companyId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    if (driversQuery.docs.isEmpty) return [];
+
+    final driverIds = driversQuery.docs.map((d) => d['driverId'] as String).toList();
+
+    // 2. Fragmentar la lista de IDs (Firestore admite máximo 10 en 'whereIn')
+    final List<TripModel> pendingTrips = [];
+    
+    // Firestore solo soporta 10 elementos en IN, agrupamos.
+    for (var i = 0; i < driverIds.length; i += 10) {
+      final chunk = driverIds.sublist(i, (i + 10) > driverIds.length ? driverIds.length : (i + 10));
+      
+      final tripsQuery = await _firestore
+          .collection('trips')
+          .where('driverId', whereIn: chunk)
+          .where('status', isEqualTo: 'active')
+          // no se puede usar where('closureRequestedAt', isNotEqualTo: null) porque Firebase restringe multiples inegualdades
+          .get();
+
+      // Filtramos en cliente por si acaso y verificamos el closureRequestedAt
+      for (final doc in tripsQuery.docs) {
+        final data = doc.data();
+        if (data['closureRequestedAt'] != null && data['isClosureApproved'] != true) {
+          pendingTrips.add(TripModel.fromMap(doc.id, data));
+        }
+      }
+    }
+
+    // Ordenar por fecha de solicitud de cierre (opcional, en memoria)
+    pendingTrips.sort((a, b) {
+       final aTime = a.closureRequestedAt;
+       final bTime = b.closureRequestedAt;
+       if (aTime == null && bTime == null) return 0;
+       if (aTime == null) return 1;
+       if (bTime == null) return -1;
+       return bTime.compareTo(aTime); // Descendente
+    });
+
+    return pendingTrips;
+  }
+
+  @override
+  Future<void> approveTripClosure(String tripId) async {
+    await _firestore.collection('trips').doc(tripId).update({
+      'isClosureApproved': true,
+    });
+  }
 }
+

@@ -282,7 +282,8 @@ class _RegisterDriverPageState extends State<RegisterDriverPage> {
       decoration: BoxDecoration(
         color: AppColors.primarySurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+        border:
+            Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,

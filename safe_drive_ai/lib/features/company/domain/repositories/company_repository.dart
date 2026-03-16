@@ -4,6 +4,7 @@ import '../../../../core/errors/failures.dart';
 import '../../../auth/domain/entities/company_entity.dart';
 import '../../../auth/domain/entities/company_link_entity.dart';
 import '../../../auth/domain/entities/user_entity.dart';
+import '../../../trips/domain/entities/trip_entity.dart';
 import '../entities/invitation_entity.dart';
 
 /// Contrato del repositorio de gestión de empresa.
@@ -72,4 +73,11 @@ abstract class CompanyRepository {
     required String phone,
     required String cargo,
   });
+
+  /// Obtiene los viajes pendientes de aprobación de los conductores de esta empresa
+  Future<Either<Failure, List<TripEntity>>> getPendingTrips(String companyId);
+
+  /// Aprueba el cierre remoto de un viaje
+  Future<Either<Failure, void>> approveTripClosure(String tripId);
 }
+

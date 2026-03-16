@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../bloc/trip_bloc.dart';
 import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
+import 'end_trip_dialog.dart';
 
 /// Panel persistente de viaje mostrado en la parte superior del home del conductor.
 class TripPanelWidget extends StatelessWidget {
@@ -72,14 +73,17 @@ class TripPanelWidget extends StatelessWidget {
   }
 
   Future<void> _onEndPressed(BuildContext context, String tripId) async {
-    final confirmed = await showDialog<bool>(
+    // Show EndTripDialog and provide the bloc so it can interact with the current TripBloc
+    final tripBloc = context.read<TripBloc>();
+
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _ConfirmEndDialog(),
+      builder: (_) => BlocProvider.value(
+        value: tripBloc,
+        child: EndTripDialog(tripId: tripId),
+      ),
     );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-    context.read<TripBloc>().add(TripEndRequested(tripId: tripId));
   }
 
   @override
@@ -104,6 +108,7 @@ class TripPanelWidget extends StatelessWidget {
             formatted: _formatElapsed(state.elapsed),
             onEnd: () => _onEndPressed(context, state.trip.id),
             onOpenMap: onOpenMap,
+            isClosureRequested: state.trip.closureRequestedAt != null,
           );
         }
 
@@ -199,17 +204,19 @@ class _ActiveTripPanel extends StatelessWidget {
     required this.formatted,
     required this.onEnd,
     required this.onOpenMap,
+    this.isClosureRequested = false,
   });
 
   final String formatted;
   final VoidCallback onEnd;
   final VoidCallback onOpenMap;
+  final bool isClosureRequested;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: const Color(0xFF1B5E20),
+      color: isClosureRequested ? const Color(0xFFE65100) : const Color(0xFF1B5E20), // Naranja oscuro si está esperando
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -224,15 +231,15 @@ class _ActiveTripPanel extends StatelessWidget {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
+                      decoration: BoxDecoration(
+                        color: isClosureRequested ? AppColors.warning : AppColors.success,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
-                    const Text(
-                      'Viaje en curso',
-                      style: TextStyle(
+                    Text(
+                      isClosureRequested ? 'Esperando aprobación...' : 'Viaje en curso',
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.w500),
@@ -256,8 +263,8 @@ class _ActiveTripPanel extends StatelessWidget {
           // Ver mapa button
           TextButton.icon(
             onPressed: onOpenMap,
-            icon: const Icon(Icons.map_outlined,
-                color: Colors.white70, size: 18),
+            icon:
+                const Icon(Icons.map_outlined, color: Colors.white70, size: 18),
             label: const Text(
               'Ver mapa',
               style: TextStyle(color: Colors.white70, fontSize: 13),
@@ -273,8 +280,7 @@ class _ActiveTripPanel extends StatelessWidget {
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
               textStyle:
@@ -356,33 +362,6 @@ class _NoCameraDialog extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           child: const Text('Continuar sin cámara'),
-        ),
-      ],
-    );
-  }
-}
-
-class _ConfirmEndDialog extends StatelessWidget {
-  const _ConfirmEndDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: const Text('Finalizar viaje'),
-      content: const Text('¿Confirmas que quieres finalizar el viaje?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.error,
-            foregroundColor: Colors.white,
-          ),
-          child: const Text('Sí, finalizar'),
         ),
       ],
     );

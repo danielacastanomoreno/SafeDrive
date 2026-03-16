@@ -11,6 +11,7 @@ import '../bloc/company_bloc.dart';
 import 'company_drivers_page.dart';
 import 'company_invitations_page.dart';
 import 'company_profile_page.dart';
+import 'company_pending_trips_page.dart';
 
 /// Pantalla principal de la empresa con BottomNavigationBar de 3 pestanas:
 ///   0 — Conductores
@@ -36,6 +37,11 @@ class _CompanyHomePageState extends State<CompanyHomePage> {
       label: 'Conductores',
       icon: Icons.people_outline,
       activeIcon: Icons.people,
+    ),
+    _TabMeta(
+      label: 'Aprobaciones',
+      icon: Icons.playlist_add_check_circle_outlined,
+      activeIcon: Icons.playlist_add_check_circle,
     ),
     _TabMeta(
       label: 'Invitaciones',
@@ -203,6 +209,9 @@ class _CompanyHomePageState extends State<CompanyHomePage> {
                   CompanyDriversPage(
                     companyId: widget.company.id,
                     companyName: widget.company.name,
+                  ),
+                  CompanyPendingTripsPage(
+                    companyId: widget.company.id,
                   ),
                   CompanyInvitationsPage(
                     companyId: widget.company.id,

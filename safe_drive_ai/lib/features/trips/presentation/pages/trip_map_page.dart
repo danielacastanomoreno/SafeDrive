@@ -7,8 +7,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../../core/constants/app_colors.dart';
 import '../bloc/trip_bloc.dart';
-import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
+import '../widgets/end_trip_dialog.dart';
 
 /// Mapa en vivo con traza azul y overlay de cámara frontal (conductor).
 ///
@@ -96,31 +96,16 @@ class _TripMapPageState extends State<TripMapPage> {
   }
 
   Future<void> _onEndPressed(BuildContext context, String tripId) async {
-    final confirmed = await showDialog<bool>(
+    final tripBloc = context.read<TripBloc>();
+
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Finalizar viaje'),
-        content: const Text('¿Confirmas que quieres finalizar el viaje?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Sí, finalizar'),
-          ),
-        ],
+      builder: (_) => BlocProvider.value(
+        value: tripBloc,
+        child: EndTripDialog(tripId: tripId),
       ),
     );
-    if (confirmed != true || !context.mounted) return;
-    context.read<TripBloc>().add(TripEndRequested(tripId: tripId));
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -134,8 +119,7 @@ class _TripMapPageState extends State<TripMapPage> {
           _initCamera();
         }
         if (state is TripActive && state.route.isNotEmpty && _followDriver) {
-          _mapController.move(
-              state.route.last, _mapController.camera.zoom);
+          _mapController.move(state.route.last, _mapController.camera.zoom);
         }
       },
       builder: (context, state) {
@@ -191,8 +175,7 @@ class _TripMapPageState extends State<TripMapPage> {
                             decoration: BoxDecoration(
                               color: AppColors.success,
                               shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: Colors.white, width: 2),
                             ),
                           ),
                         ),
@@ -209,8 +192,7 @@ class _TripMapPageState extends State<TripMapPage> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF1565C0),
                               shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: Colors.white, width: 3),
+                              border: Border.all(color: Colors.white, width: 3),
                               boxShadow: const [
                                 BoxShadow(
                                     color: Colors.black38,
@@ -296,8 +278,7 @@ class _TripMapPageState extends State<TripMapPage> {
                   child: _frontVisible
                       ? _CameraOverlay(
                           controller: _frontController!,
-                          onClose: () =>
-                              setState(() => _frontVisible = false),
+                          onClose: () => setState(() => _frontVisible = false),
                         )
                       : _MapButton(
                           icon: Icons.camera_front_outlined,
@@ -332,8 +313,7 @@ class _TripMapPageState extends State<TripMapPage> {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        onPressed: () =>
-                            _onEndPressed(context, state.trip.id),
+                        onPressed: () => _onEndPressed(context, state.trip.id),
                         icon: const Icon(Icons.stop),
                         label: const Text('Finalizar Viaje',
                             style: TextStyle(
@@ -403,8 +383,7 @@ class _CameraOverlay extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [
-          BoxShadow(
-              color: Colors.black54, blurRadius: 10, offset: Offset(0, 3))
+          BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 3))
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -427,8 +406,7 @@ class _CameraOverlay extends StatelessWidget {
                   color: Colors.black54,
                   shape: BoxShape.circle,
                 ),
-                child:
-                    const Icon(Icons.close, color: Colors.white, size: 14),
+                child: const Icon(Icons.close, color: Colors.white, size: 14),
               ),
             ),
           ),

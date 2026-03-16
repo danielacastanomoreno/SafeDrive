@@ -6,7 +6,8 @@ import '../../../../core/usecases/usecase.dart';
 import '../entities/trip_entity.dart';
 import '../repositories/trip_repository.dart';
 
-class GetActiveTripUseCase implements UseCase<TripEntity?, GetActiveTripParams> {
+class GetActiveTripUseCase
+    implements UseCase<TripEntity?, GetActiveTripParams> {
   const GetActiveTripUseCase(this._repository);
 
   final TripRepository _repository;

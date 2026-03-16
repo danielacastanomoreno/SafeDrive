@@ -10,6 +10,7 @@ import '../../domain/usecases/login_company_usecase.dart';
 import '../../domain/usecases/login_driver_usecase.dart';
 import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/register_company_usecase.dart';
+import '../../domain/usecases/register_driver_usecase.dart';
 import '../../domain/usecases/send_password_reset_usecase.dart';
 import '../../domain/usecases/set_active_company_usecase.dart';
 import 'auth_event.dart';
@@ -27,6 +28,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required LoginDriverUseCase loginDriverUseCase,
     required LoginCompanyUseCase loginCompanyUseCase,
     required RegisterCompanyUseCase registerCompanyUseCase,
+    required RegisterDriverUseCase registerDriverUseCase,
     required LogoutUseCase logoutUseCase,
     required SendPasswordResetUseCase sendPasswordResetUseCase,
     required GetDriverCompaniesUseCase getDriverCompaniesUseCase,
@@ -38,6 +40,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         _loginDriverUseCase = loginDriverUseCase,
         _loginCompanyUseCase = loginCompanyUseCase,
         _registerCompanyUseCase = registerCompanyUseCase,
+        _registerDriverUseCase = registerDriverUseCase,
         _logoutUseCase = logoutUseCase,
         _sendPasswordResetUseCase = sendPasswordResetUseCase,
         _getDriverCompaniesUseCase = getDriverCompaniesUseCase,
@@ -48,6 +51,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthDriverLoginRequested>(_onDriverLogin);
     on<AuthCompanyLoginRequested>(_onCompanyLogin);
     on<AuthCompanyRegisterRequested>(_onCompanyRegister);
+    on<AuthDriverRegisterRequested>(_onDriverRegister);
     on<AuthLogoutRequested>(_onLogout);
     on<AuthPasswordResetRequested>(_onPasswordReset);
     on<AuthCompanySelected>(_onCompanySelected);
@@ -60,6 +64,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final LoginDriverUseCase _loginDriverUseCase;
   final LoginCompanyUseCase _loginCompanyUseCase;
   final RegisterCompanyUseCase _registerCompanyUseCase;
+  final RegisterDriverUseCase _registerDriverUseCase;
   final LogoutUseCase _logoutUseCase;
   final SendPasswordResetUseCase _sendPasswordResetUseCase;
   final GetDriverCompaniesUseCase _getDriverCompaniesUseCase;
@@ -121,7 +126,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             final activeIdResult =
                 await _getActiveCompanyUseCase(const NoParams());
 
-            final activeCompanyId = activeIdResult.fold((_) => null, (id) => id);
+            final activeCompanyId =
+                activeIdResult.fold((_) => null, (id) => id);
 
             emit(
               AuthDriverAuthenticated(
@@ -238,6 +244,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     result.fold(
       (failure) => emit(AuthError(message: failure.message)),
       (company) => emit(AuthCompanyAuthenticated(company: company)),
+    );
+  }
+
+  /// Registra un nuevo conductor independiente.
+  Future<void> _onDriverRegister(
+    AuthDriverRegisterRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+
+    final result = await _registerDriverUseCase(
+      RegisterDriverParams(
+        name: event.name,
+        cedula: event.cedula,
+        email: event.email,
+        password: event.password,
+      ),
+    );
+
+    result.fold(
+      (failure) => emit(AuthError(message: failure.message)),
+      (user) => emit(
+        AuthDriverAuthenticated(
+          user: user,
+          companies: const [], // A new driver starts with 0 companies linked
+          activeCompanyId: null,
+        ),
+      ),
     );
   }
 

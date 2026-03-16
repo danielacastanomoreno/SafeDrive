@@ -40,9 +40,7 @@ class InvitationModel extends InvitationEntity {
       'phone': phone,
       'status': _statusToString(status),
       'sentAt': FieldValue.serverTimestamp(),
-      'resolvedAt': resolvedAt != null
-          ? Timestamp.fromDate(resolvedAt!)
-          : null,
+      'resolvedAt': resolvedAt != null ? Timestamp.fromDate(resolvedAt!) : null,
     };
   }
 

@@ -49,3 +49,28 @@ class TripLocationUpdated extends TripEvent {
   @override
   List<Object?> get props => [lat, lng];
 }
+
+// --- Cierre de viaje ---
+
+class RequestRemoteClosureEvent extends TripEvent {
+  final String tripId;
+  const RequestRemoteClosureEvent({required this.tripId});
+  @override
+  List<Object?> get props => [tripId];
+}
+
+class ApprovalStreamUpdatedEvent extends TripEvent {
+  final bool isApproved;
+  final String? tripId;
+  const ApprovalStreamUpdatedEvent({required this.isApproved, this.tripId});
+  @override
+  List<Object?> get props => [isApproved, tripId];
+}
+
+class VerifyManualPinEvent extends TripEvent {
+  final String tripId;
+  final String pin;
+  const VerifyManualPinEvent({required this.tripId, required this.pin});
+  @override
+  List<Object?> get props => [tripId, pin];
+}

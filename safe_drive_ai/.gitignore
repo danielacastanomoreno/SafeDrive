@@ -47,3 +47,10 @@ app.*.map.json
 # Secretos Firebase
 /android/app/google-services.json
 /ios/Runner/GoogleService-Info.plist
+
+# AI and Claude
+.claude/
+.gemini/
+.cursor/
+lib/delete_trips.dart
+brain/

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../domain/entities/trip_entity.dart';
@@ -17,18 +18,21 @@ class TripDatasourceImpl implements TripDatasource {
     required String driverId,
     required bool hasCameraPermission,
   }) async {
+    print('TripDatasource: Checking for existing active trips for driver \$driverId');
     final existing = await _firestore
         .collection('trips')
         .where('driverId', isEqualTo: driverId)
         .where('status', isEqualTo: 'active')
         .limit(1)
         .get();
+    print('TripDatasource: existing trips query finished. Found: \${existing.docs.length}');
 
     if (existing.docs.isNotEmpty) {
       throw const TripAlreadyActiveException();
     }
 
     final now = DateTime.now();
+    print('TripDatasource: Calling _firestore.collection(trips).add()');
     final docRef = await _firestore.collection('trips').add({
       'driverId': driverId,
       'startTime': Timestamp.fromDate(now),
@@ -36,6 +40,7 @@ class TripDatasourceImpl implements TripDatasource {
       'hasCameraPermission': hasCameraPermission,
       'status': 'active',
     });
+    print('TripDatasource: Trip added with ID \${docRef.id}');
 
     return TripModel(
       id: docRef.id,
@@ -112,5 +117,73 @@ class TripDatasourceImpl implements TripDatasource {
     return snapshot.docs
         .map((doc) => RoutePointModel.fromMap(doc.data()))
         .toList();
+  }
+
+  @override
+  Future<List<TripModel>> getDriverTrips(String driverId) async {
+    final snapshot = await _firestore
+        .collection('trips')
+        .where('driverId', isEqualTo: driverId)
+        .orderBy('startTime', descending: true)
+        .get();
+    return snapshot.docs
+        .map((doc) => TripModel.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  // --- Cierre de viaje ---
+
+  @override
+  Future<void> requestRemoteClosure(String tripId) async {
+    try {
+      await _firestore.collection('trips').doc(tripId).update({
+        'closureRequestedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw ServerException('Error solicitando cierre remoto: $e');
+    }
+  }
+
+  @override
+  Stream<TripModel> listenToApprovalStream(String tripId) {
+    return _firestore
+        .collection('trips')
+        .doc(tripId)
+        .snapshots()
+        .map((snapshot) {
+      if (!snapshot.exists) throw const ServerException('El viaje no existe.');
+      return TripModel.fromMap(snapshot.id, snapshot.data()!);
+    });
+  }
+
+  @override
+  Future<String?> getEndTripPin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('CACHED_END_TRIP_PIN');
+    } catch (e) {
+      throw const CacheException('Error leyendo PIN de contingencia');
+    }
+  }
+
+  @override
+  Future<void> setEndTripPin(String pin) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('CACHED_END_TRIP_PIN', pin);
+    } catch (e) {
+      throw const CacheException('Error guardando PIN de contingencia');
+    }
+  }
+
+  @override
+  Future<void> finalizeLocalTrip() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('IS_TRIP_ACTIVE', false);
+      await prefs.remove('CACHED_END_TRIP_PIN');
+    } catch (e) {
+      throw const CacheException('Error limpiando caché local del viaje');
+    }
   }
 }

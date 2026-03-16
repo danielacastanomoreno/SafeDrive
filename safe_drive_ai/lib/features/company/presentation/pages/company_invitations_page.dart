@@ -20,8 +20,7 @@ class CompanyInvitationsPage extends StatefulWidget {
   final String companyName;
 
   @override
-  State<CompanyInvitationsPage> createState() =>
-      _CompanyInvitationsPageState();
+  State<CompanyInvitationsPage> createState() => _CompanyInvitationsPageState();
 }
 
 class _CompanyInvitationsPageState extends State<CompanyInvitationsPage> {
@@ -102,9 +101,8 @@ class _CompanyInvitationsPageState extends State<CompanyInvitationsPage> {
           current is CompanyInvitationsLoaded ||
           current is CompanyError,
       builder: (context, state) {
-        final List<InvitationEntity> invitations = state is CompanyInvitationsLoaded
-            ? state.invitations
-            : const [];
+        final List<InvitationEntity> invitations =
+            state is CompanyInvitationsLoaded ? state.invitations : const [];
 
         return RefreshIndicator(
           onRefresh: _onRefresh,
@@ -350,8 +348,7 @@ class _CompanyInvitationsPageState extends State<CompanyInvitationsPage> {
       ),
       filled: true,
       fillColor: AppColors.background,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     );
   }
 }

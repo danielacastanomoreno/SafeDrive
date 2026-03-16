@@ -45,7 +45,8 @@ class NotAuthenticatedFailure extends Failure {
 // ── Servidor / Red ────────────────────────────────────────────────────────────
 
 class ServerFailure extends Failure {
-  const ServerFailure({super.message = 'Error en el servidor. Intenta más tarde.'});
+  const ServerFailure(
+      {super.message = 'Error en el servidor. Intenta más tarde.'});
 }
 
 class NetworkFailure extends Failure {
@@ -55,7 +56,8 @@ class NetworkFailure extends Failure {
 // ── Firestore ────────────────────────────────────────────────────────────────
 
 class FirestoreFailure extends Failure {
-  const FirestoreFailure({super.message = 'Error al acceder a la base de datos.'});
+  const FirestoreFailure(
+      {super.message = 'Error al acceder a la base de datos.'});
 }
 
 class DocumentNotFoundFailure extends Failure {
@@ -99,7 +101,8 @@ class InvitationNotFoundFailure extends Failure {
 
 class InvitationAlreadyExistsFailure extends Failure {
   const InvitationAlreadyExistsFailure()
-      : super(message: 'Ya existe una invitación pendiente para este conductor.');
+      : super(
+            message: 'Ya existe una invitación pendiente para este conductor.');
 }
 
 class DriverAlreadyLinkedFailure extends Failure {

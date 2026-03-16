@@ -35,6 +35,14 @@ abstract class AuthRepository {
     String representativeName,
   );
 
+  /// Registra un nuevo conductor en Firebase Auth y en Firestore (`users`).
+  Future<Either<Failure, UserEntity>> registerDriver(
+    String name,
+    String cedula,
+    String email,
+    String password,
+  );
+
   /// Cierra la sesión activa en Firebase Auth y limpia la sesión local.
   Future<Either<Failure, void>> logout();
 

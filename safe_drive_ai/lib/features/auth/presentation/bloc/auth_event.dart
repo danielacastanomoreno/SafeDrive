@@ -61,6 +61,24 @@ class AuthCompanyRegisterRequested extends AuthEvent {
   List<Object?> get props => [name, nit, email, password, representativeName];
 }
 
+/// Solicita el registro de un nuevo conductor independiente.
+class AuthDriverRegisterRequested extends AuthEvent {
+  const AuthDriverRegisterRequested({
+    required this.name,
+    required this.cedula,
+    required this.email,
+    required this.password,
+  });
+
+  final String name;
+  final String cedula;
+  final String email;
+  final String password;
+
+  @override
+  List<Object?> get props => [name, cedula, email, password];
+}
+
 /// Solicita cerrar la sesión activa.
 class AuthLogoutRequested extends AuthEvent {
   const AuthLogoutRequested();

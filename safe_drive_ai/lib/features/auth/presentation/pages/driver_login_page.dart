@@ -135,6 +135,17 @@ class _DriverLoginPageState extends State<DriverLoginPage> {
                         ),
                       ),
                     ),
+                    Center(
+                      child: TextButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => context.push('/driver/register'),
+                        child: const Text(
+                          '¿No tienes cuenta? Regístrate',
+                          style: TextStyle(color: AppColors.primary),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

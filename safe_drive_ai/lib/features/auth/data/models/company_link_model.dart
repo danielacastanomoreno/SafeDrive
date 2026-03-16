@@ -27,7 +27,9 @@ class CompanyLinkModel extends CompanyLinkEntity {
       driverId: map['driverId'] as String,
       cargo: map['cargo'] as String,
       phone: map['phone'] as String,
-      status: (map['status'] as String) == 'active' ? LinkStatus.active : LinkStatus.inactive,
+      status: (map['status'] as String) == 'active'
+          ? LinkStatus.active
+          : LinkStatus.inactive,
       linkedAt: (map['linkedAt'] as Timestamp).toDate(),
       unlinkedAt: map['unlinkedAt'] != null
           ? (map['unlinkedAt'] as Timestamp).toDate()
@@ -43,9 +45,7 @@ class CompanyLinkModel extends CompanyLinkEntity {
       'phone': phone,
       'status': status == LinkStatus.active ? 'active' : 'inactive',
       'linkedAt': FieldValue.serverTimestamp(),
-      'unlinkedAt': unlinkedAt != null
-          ? Timestamp.fromDate(unlinkedAt!)
-          : null,
+      'unlinkedAt': unlinkedAt != null ? Timestamp.fromDate(unlinkedAt!) : null,
     };
   }
 }

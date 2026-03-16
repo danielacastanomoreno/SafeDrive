@@ -10,6 +10,9 @@ class TripModel extends TripEntity {
     required super.hasCameraPermission,
     required super.status,
     super.endTime,
+    super.endTripPin,
+    super.closureRequestedAt,
+    super.isClosureApproved,
   });
 
   factory TripModel.fromMap(String id, Map<String, dynamic> map) {
@@ -23,9 +26,14 @@ class TripModel extends TripEntity {
       hasCameraPermission: map['hasCameraPermission'] as bool? ?? false,
       status: switch (map['status'] as String? ?? 'active') {
         'completed' => TripStatus.completed,
-        'onBreak'   => TripStatus.onBreak,
-        _           => TripStatus.active,
+        'onBreak' => TripStatus.onBreak,
+        _ => TripStatus.active,
       },
+      endTripPin: map['endTripPin'] as String?,
+      closureRequestedAt: map['closureRequestedAt'] != null
+          ? (map['closureRequestedAt'] as Timestamp).toDate()
+          : null,
+      isClosureApproved: map['isClosureApproved'] as bool? ?? false,
     );
   }
 
@@ -36,8 +44,12 @@ class TripModel extends TripEntity {
         'hasCameraPermission': hasCameraPermission,
         'status': switch (status) {
           TripStatus.completed => 'completed',
-          TripStatus.onBreak   => 'onBreak',
-          TripStatus.active    => 'active',
+          TripStatus.onBreak => 'onBreak',
+          TripStatus.active => 'active',
         },
+        if (endTripPin != null) 'endTripPin': endTripPin,
+        if (closureRequestedAt != null)
+          'closureRequestedAt': Timestamp.fromDate(closureRequestedAt!),
+        'isClosureApproved': isClosureApproved,
       };
 }

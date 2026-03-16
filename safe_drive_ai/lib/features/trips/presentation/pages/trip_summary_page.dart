@@ -12,9 +12,10 @@ import '../../domain/usecases/get_trip_route_usecase.dart';
 /// Pantalla de resumen del viaje mostrada automáticamente al finalizar.
 /// Incluye mapa con la ruta completa.
 class TripSummaryPage extends StatefulWidget {
-  const TripSummaryPage({super.key, required this.trip});
+  const TripSummaryPage({super.key, this.trip});
 
-  final TripEntity trip;
+  /// Trip entity - puede ser null si se cerró por PIN/aprobación remota
+  final TripEntity? trip;
 
   @override
   State<TripSummaryPage> createState() => _TripSummaryPageState();
@@ -23,16 +24,38 @@ class TripSummaryPage extends StatefulWidget {
 class _TripSummaryPageState extends State<TripSummaryPage> {
   List<LatLng> _route = [];
   bool _loadingRoute = true;
+  TripEntity? _trip;
+  bool _loadingTrip = true;
 
   @override
   void initState() {
     super.initState();
-    _loadRoute();
+    _initializeTrip();
+  }
+
+  Future<void> _initializeTrip() async {
+    if (widget.trip != null) {
+      _trip = widget.trip;
+      _loadingTrip = false;
+      _loadRoute();
+    } else {
+      // Trip was closed via PIN/remote - try to get the last trip from driver
+      // For now, show a simplified summary
+      setState(() {
+        _loadingTrip = false;
+        _loadingRoute = false;
+      });
+    }
   }
 
   Future<void> _loadRoute() async {
+    if (_trip == null) {
+      setState(() => _loadingRoute = false);
+      return;
+    }
+
     final result = await sl<GetTripRouteUseCase>()(
-      GetTripRouteParams(tripId: widget.trip.id),
+      GetTripRouteParams(tripId: _trip!.id),
     );
     result.fold(
       (_) => setState(() => _loadingRoute = false),
@@ -57,16 +80,51 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
 
   LatLng? get _mapCenter {
     if (_route.isEmpty) return null;
-    final avgLat = _route.map((p) => p.latitude).reduce((a, b) => a + b) /
-        _route.length;
-    final avgLng = _route.map((p) => p.longitude).reduce((a, b) => a + b) /
-        _route.length;
+    final avgLat =
+        _route.map((p) => p.latitude).reduce((a, b) => a + b) / _route.length;
+    final avgLng =
+        _route.map((p) => p.longitude).reduce((a, b) => a + b) / _route.length;
     return LatLng(avgLat, avgLng);
   }
 
   @override
   Widget build(BuildContext context) {
-    final duration = widget.trip.elapsed;
+    // Handle loading and null cases
+    if (_loadingTrip || _trip == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Resumen del viaje'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          automaticallyImplyLeading: false,
+          elevation: 0,
+        ),
+        body: const SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle, color: AppColors.success, size: 64),
+                SizedBox(height: 16),
+                Text(
+                  'Viaje finalizado',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                CircularProgressIndicator(color: AppColors.primary),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final duration = _trip!.elapsed;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -102,13 +160,13 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
               _SummaryRow(
                 icon: Icons.play_circle_outline,
                 label: 'Inicio',
-                value: _formatDateTime(widget.trip.startTime),
+                value: _formatDateTime(_trip!.startTime),
               ),
               const Divider(height: 24),
               _SummaryRow(
                 icon: Icons.stop_circle_outlined,
                 label: 'Fin',
-                value: _formatDateTime(widget.trip.endTime!),
+                value: _formatDateTime(_trip!.endTime!),
               ),
               const Divider(height: 24),
               _SummaryRow(
@@ -118,14 +176,12 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
               ),
               const Divider(height: 24),
               _SummaryRow(
-                icon: widget.trip.hasCameraPermission
+                icon: _trip!.hasCameraPermission
                     ? Icons.videocam_outlined
                     : Icons.videocam_off_outlined,
                 label: 'Monitoreo de cámara',
-                value: widget.trip.hasCameraPermission
-                    ? 'Activo'
-                    : 'Sin cámara',
-                valueColor: widget.trip.hasCameraPermission
+                value: _trip!.hasCameraPermission ? 'Activo' : 'Sin cámara',
+                valueColor: _trip!.hasCameraPermission
                     ? AppColors.success
                     : AppColors.warning,
               ),
@@ -199,8 +255,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
               Text(
                 'Ruta no disponible\n(GPS sin permisos o sin puntos)',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
           ),

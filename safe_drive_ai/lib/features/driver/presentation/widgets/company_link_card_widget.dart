@@ -15,8 +15,7 @@ class CompanyLinkCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormatted =
-        DateFormat('dd/MM/yyyy').format(link.linkedAt);
+    final dateFormatted = DateFormat('dd/MM/yyyy').format(link.linkedAt);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

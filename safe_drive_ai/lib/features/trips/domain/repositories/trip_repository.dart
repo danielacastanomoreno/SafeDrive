@@ -19,4 +19,12 @@ abstract class TripRepository {
   });
 
   Future<Either<Failure, List<RoutePointEntity>>> getTripRoute(String tripId);
+  Future<Either<Failure, List<TripEntity>>> getDriverTrips(String driverId);
+
+  // Cierre de viaje
+  Future<Either<Failure, void>> requestRemoteClosure(String tripId);
+  Stream<Either<Failure, TripEntity>> listenToApprovalStream(String tripId);
+  Future<Either<Failure, bool>> verifyManualPin(String inputPin);
+  Future<Either<Failure, void>> stopMonitoringAndFinalize(String tripId);
+  Future<Either<Failure, void>> generateAndStorePin(String tripId);
 }

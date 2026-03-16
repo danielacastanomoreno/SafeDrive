@@ -43,7 +43,8 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
     final data = doc.data()!;
     if (data['role'] != 'driver') {
       await _auth.signOut();
-      throw const AuthException('Acceso denegado: esta cuenta no es de conductor.');
+      throw const AuthException(
+          'Acceso denegado: esta cuenta no es de conductor.');
     }
     return UserModel.fromMap(uid, data);
   }
@@ -63,7 +64,8 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
     final data = doc.data()!;
     if (data['role'] != 'company') {
       await _auth.signOut();
-      throw const AuthException('Acceso denegado: esta cuenta no es de empresa.');
+      throw const AuthException(
+          'Acceso denegado: esta cuenta no es de empresa.');
     }
     return CompanyModel.fromMap(uid, data);
   }
@@ -104,6 +106,48 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
     await _firestore.collection('companies').doc(uid).set(model.toMap());
 
     return model;
+  }
+
+  @override
+  Future<UserModel> registerDriver(
+    String name,
+    String cedula,
+    String email,
+    String password,
+  ) async {
+    final cedulaQuery = await _firestore
+        .collection('users')
+        .where('cedula', isEqualTo: cedula)
+        .limit(1)
+        .get();
+    if (cedulaQuery.docs.isNotEmpty) {
+      throw const CedulaAlreadyRegisteredException();
+    }
+
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final uid = credential.user!.uid;
+
+      final model = UserModel(
+        id: uid,
+        name: name,
+        cedula: cedula,
+        email: email,
+        role: UserRole.driver,
+        createdAt: DateTime.now(),
+      );
+
+      await _firestore.collection('users').doc(uid).set(model.toMap());
+      return model;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        throw const EmailAlreadyRegisteredException();
+      }
+      rethrow;
+    }
   }
 
   @override

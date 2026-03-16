@@ -72,3 +72,20 @@ class TripError extends TripState {
   @override
   List<Object?> get props => [message];
 }
+
+// --- Cierre de viaje ---
+
+class TripClosureLoading extends TripState {}
+
+class TripClosureRequested extends TripState {}
+
+class TripFinalizedSuccess extends TripState {
+  const TripFinalizedSuccess();
+}
+
+class TripClosureError extends TripState {
+  final String message;
+  const TripClosureError({required this.message});
+  @override
+  List<Object?> get props => [message];
+}

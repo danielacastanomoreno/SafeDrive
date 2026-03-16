@@ -96,6 +96,34 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, UserEntity>> registerDriver(
+    String name,
+    String cedula,
+    String email,
+    String password,
+  ) async {
+    try {
+      final model = await _datasource.registerDriver(
+        name,
+        cedula,
+        email,
+        password,
+      );
+      return Right(model);
+    } on CedulaAlreadyRegisteredException {
+      return const Left(CedulaAlreadyRegisteredFailure());
+    } on EmailAlreadyRegisteredException {
+      return const Left(EmailAlreadyRegisteredFailure());
+    } on FirebaseAuthException catch (e) {
+      return Left(_mapFirebaseAuthException(e));
+    } on AuthException catch (e) {
+      return Left(AuthFailure(message: e.message));
+    } on Exception catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, void>> logout() async {
     try {
       await _datasource.logout();
