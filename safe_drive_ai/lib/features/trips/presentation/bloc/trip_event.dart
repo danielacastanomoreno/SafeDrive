@@ -66,11 +66,3 @@ class ApprovalStreamUpdatedEvent extends TripEvent {
   @override
   List<Object?> get props => [isApproved, tripId];
 }
-
-class VerifyManualPinEvent extends TripEvent {
-  final String tripId;
-  final String pin;
-  const VerifyManualPinEvent({required this.tripId, required this.pin});
-  @override
-  List<Object?> get props => [tripId, pin];
-}

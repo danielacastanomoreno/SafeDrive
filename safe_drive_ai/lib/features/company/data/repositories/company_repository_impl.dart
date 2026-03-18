@@ -200,5 +200,41 @@ class CompanyRepositoryImpl implements CompanyRepository {
       return const Left(ServerFailure());
     }
   }
+
+  @override
+  Future<Either<Failure, void>> rejectTripClosure(String tripId) async {
+    try {
+      await _datasource.rejectTripClosure(tripId);
+      return const Right(null);
+    } on FirestoreException catch (e) {
+      return Left(FirestoreFailure(message: e.message));
+    } catch (_) {
+      return const Left(ServerFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, TripEntity>> createTripWithDestination({
+    required String companyId,
+    required String driverId,
+    required double destinationLat,
+    required double destinationLng,
+    required String destinationAddress,
+  }) async {
+    try {
+      final trip = await _datasource.createTripWithDestination(
+        companyId: companyId,
+        driverId: driverId,
+        destinationLat: destinationLat,
+        destinationLng: destinationLng,
+        destinationAddress: destinationAddress,
+      );
+      return Right(trip);
+    } on FirestoreException catch (e) {
+      return Left(FirestoreFailure(message: e.message));
+    } catch (_) {
+      return const Left(ServerFailure());
+    }
+  }
 }
 

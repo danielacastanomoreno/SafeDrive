@@ -35,6 +35,8 @@ import 'features/company/domain/usecases/unlink_driver_usecase.dart';
 import 'features/company/domain/usecases/update_company_profile_usecase.dart';
 import 'features/company/domain/usecases/get_pending_trips_usecase.dart';
 import 'features/company/domain/usecases/approve_trip_closure_usecase.dart';
+import 'features/company/domain/usecases/reject_trip_closure_usecase.dart';
+import 'features/company/domain/usecases/create_trip_with_destination_usecase.dart';
 import 'features/company/presentation/bloc/company_bloc.dart';
 import 'features/driver/data/datasources/driver_datasource.dart';
 import 'features/driver/data/datasources/driver_datasource_impl.dart';
@@ -56,9 +58,7 @@ import 'features/trips/domain/usecases/save_route_point_usecase.dart';
 import 'features/trips/domain/usecases/start_trip_usecase.dart';
 import 'features/trips/domain/usecases/request_remote_closure_usecase.dart';
 import 'features/trips/domain/usecases/listen_to_approval_stream_usecase.dart';
-import 'features/trips/domain/usecases/verify_manual_pin_usecase.dart';
-import 'features/trips/domain/usecases/stop_monitoring_and_finalize_usecase.dart';
-import 'features/trips/domain/usecases/generate_and_store_pin_usecase.dart';
+import 'features/trips/domain/usecases/end_trip_with_zone_check_usecase.dart';
 import 'features/trips/domain/usecases/get_driver_trips_usecase.dart';
 
 /// Contenedor global de inyección de dependencias de Safe Drive AI.
@@ -156,6 +156,8 @@ void _initCompany() {
   sl.registerLazySingleton(() => RegisterDriverByCompanyUseCase(sl()));
   sl.registerLazySingleton(() => GetPendingTripsUseCase(sl()));
   sl.registerLazySingleton(() => ApproveTripClosureUseCase(sl()));
+  sl.registerLazySingleton(() => RejectTripClosureUseCase(sl()));
+  sl.registerLazySingleton(() => CreateTripWithDestinationUseCase(sl()));
 
   // BLoC — factory para instancia fresca en cada CompanyHomePage
   sl.registerFactory(
@@ -169,6 +171,7 @@ void _initCompany() {
       registerDriverByCompanyUseCase: sl(),
       getPendingTripsUseCase: sl(),
       approveTripClosureUseCase: sl(),
+      rejectTripClosureUseCase: sl(),
     ),
   );
 }
@@ -211,10 +214,8 @@ void _initTrips() {
   sl.registerLazySingleton(() => GetTripRouteUseCase(sl()));
   sl.registerLazySingleton(() => GetDriverTripsUseCase(sl()));
 
-  // New Closure UseCases
+  // Closure UseCases
   sl.registerLazySingleton(() => RequestRemoteClosureUseCase(sl()));
   sl.registerLazySingleton(() => ListenToApprovalStreamUseCase(sl()));
-  sl.registerLazySingleton(() => VerifyManualPinUseCase(sl()));
-  sl.registerLazySingleton(() => StopMonitoringAndFinalizeUseCase(sl()));
-  sl.registerLazySingleton(() => GenerateAndStorePinUseCase(sl()));
+  sl.registerLazySingleton(() => EndTripWithZoneCheckUseCase(sl()));
 }

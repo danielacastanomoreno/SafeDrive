@@ -79,5 +79,17 @@ abstract class CompanyRepository {
 
   /// Aprueba el cierre remoto de un viaje
   Future<Either<Failure, void>> approveTripClosure(String tripId);
+
+  /// Rechaza el cierre de un viaje
+  Future<Either<Failure, void>> rejectTripClosure(String tripId);
+
+  /// Crea un viaje pendiente para un conductor con destino pactado
+  Future<Either<Failure, TripEntity>> createTripWithDestination({
+    required String companyId,
+    required String driverId,
+    required double destinationLat,
+    required double destinationLng,
+    required String destinationAddress,
+  });
 }
 

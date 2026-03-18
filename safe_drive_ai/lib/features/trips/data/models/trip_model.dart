@@ -10,9 +10,12 @@ class TripModel extends TripEntity {
     required super.hasCameraPermission,
     required super.status,
     super.endTime,
-    super.endTripPin,
     super.closureRequestedAt,
     super.isClosureApproved,
+    super.destinationLat,
+    super.destinationLng,
+    super.destinationAddress,
+    super.isOutOfZone,
   });
 
   factory TripModel.fromMap(String id, Map<String, dynamic> map) {
@@ -27,13 +30,18 @@ class TripModel extends TripEntity {
       status: switch (map['status'] as String? ?? 'active') {
         'completed' => TripStatus.completed,
         'onBreak' => TripStatus.onBreak,
+        'pending' => TripStatus.pending,
+        'pendingApproval' => TripStatus.pendingApproval,
         _ => TripStatus.active,
       },
-      endTripPin: map['endTripPin'] as String?,
       closureRequestedAt: map['closureRequestedAt'] != null
           ? (map['closureRequestedAt'] as Timestamp).toDate()
           : null,
       isClosureApproved: map['isClosureApproved'] as bool? ?? false,
+      destinationLat: map['destinationLat'] as double?,
+      destinationLng: map['destinationLng'] as double?,
+      destinationAddress: map['destinationAddress'] as String?,
+      isOutOfZone: map['isOutOfZone'] as bool? ?? false,
     );
   }
 
@@ -45,11 +53,16 @@ class TripModel extends TripEntity {
         'status': switch (status) {
           TripStatus.completed => 'completed',
           TripStatus.onBreak => 'onBreak',
+          TripStatus.pending => 'pending',
+          TripStatus.pendingApproval => 'pendingApproval',
           TripStatus.active => 'active',
         },
-        if (endTripPin != null) 'endTripPin': endTripPin,
         if (closureRequestedAt != null)
           'closureRequestedAt': Timestamp.fromDate(closureRequestedAt!),
         'isClosureApproved': isClosureApproved,
+        if (destinationLat != null) 'destinationLat': destinationLat,
+        if (destinationLng != null) 'destinationLng': destinationLng,
+        if (destinationAddress != null) 'destinationAddress': destinationAddress,
+        'isOutOfZone': isOutOfZone,
       };
 }

@@ -1,8 +1,8 @@
 import 'package:dartz/dartz.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
-import '../../../../core/services/foreground_task_service.dart';
 import '../../domain/entities/route_point_entity.dart';
 import '../../domain/entities/trip_entity.dart';
 import '../../domain/repositories/trip_repository.dart';
@@ -124,49 +124,31 @@ class TripRepositoryImpl implements TripRepository {
   }
 
   @override
-  Future<Either<Failure, bool>> verifyManualPin(String inputPin) async {
+  Future<Either<Failure, TripEntity>> endTripWithZoneCheck(String tripId) async {
     try {
-      final cachedPin = await _datasource.getEndTripPin();
-      if (cachedPin != null && cachedPin == inputPin) {
-        return const Right(true);
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return const Left(PermissionDeniedFailure());
       }
-      return const Right(false);
-    } on CacheException catch (e) {
-      return Left(CacheFailure(message: e.message));
-    } catch (e) {
-      return Left(CacheFailure(message: e.toString()));
-    }
-  }
 
-  @override
-  Future<Either<Failure, void>> stopMonitoringAndFinalize(String tripId) async {
-    try {
-      // 1. Detener Foreground Isolate
-      final foregroundTaskService = ForegroundTaskService();
-      await foregroundTaskService.stopTask();
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
 
-      // 2. Actualizar BD Local
-      await _datasource.finalizeLocalTrip();
+      final trip = await _datasource.endTripWithZoneCheck(
+        tripId: tripId,
+        currentLat: position.latitude,
+        currentLng: position.longitude,
+      );
 
-      // 3. Actualizar Firestore
-      await _datasource.endTrip(tripId);
-
-      return const Right(null);
-    } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, void>> generateAndStorePin(String tripId) async {
-    try {
-      // Generate a random 4-digit PIN
-      final pin =
-          (1000 + (DateTime.now().millisecondsSinceEpoch % 9000)).toString();
-      await _datasource.setEndTripPin(pin);
-      return const Right(null);
-    } on CacheException catch (e) {
-      return Left(CacheFailure(message: e.message));
+      return Right(trip);
+    } on DocumentNotFoundException {
+      return const Left(DocumentNotFoundFailure());
+    } on ServerException catch (e) {
+      return Left(ServerFailure(message: e.message));
     } catch (e) {
       return Left(ServerFailure(message: e.toString()));
     }

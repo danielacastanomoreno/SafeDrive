@@ -11,9 +11,7 @@ import '../../domain/usecases/save_route_point_usecase.dart';
 import '../../domain/usecases/start_trip_usecase.dart';
 import '../../domain/usecases/request_remote_closure_usecase.dart';
 import '../../domain/usecases/listen_to_approval_stream_usecase.dart';
-import '../../domain/usecases/verify_manual_pin_usecase.dart';
-import '../../domain/usecases/stop_monitoring_and_finalize_usecase.dart';
-import '../../domain/usecases/generate_and_store_pin_usecase.dart';
+import '../../domain/usecases/end_trip_with_zone_check_usecase.dart';
 import 'trip_event.dart';
 import 'trip_state.dart';
 
@@ -25,18 +23,14 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     required SaveRoutePointUseCase saveRoutePointUseCase,
     required RequestRemoteClosureUseCase requestRemoteClosureUseCase,
     required ListenToApprovalStreamUseCase listenToApprovalStreamUseCase,
-    required VerifyManualPinUseCase verifyManualPinUseCase,
-    required StopMonitoringAndFinalizeUseCase stopMonitoringAndFinalizeUseCase,
-    required GenerateAndStorePinUseCase generateAndStorePinUseCase,
+    required EndTripWithZoneCheckUseCase endTripWithZoneCheckUseCase,
   })  : _startTripUseCase = startTripUseCase,
         _endTripUseCase = endTripUseCase,
         _getActiveTripUseCase = getActiveTripUseCase,
         _saveRoutePointUseCase = saveRoutePointUseCase,
         _requestRemoteClosureUseCase = requestRemoteClosureUseCase,
         _listenToApprovalStreamUseCase = listenToApprovalStreamUseCase,
-        _verifyManualPinUseCase = verifyManualPinUseCase,
-        _stopMonitoringAndFinalizeUseCase = stopMonitoringAndFinalizeUseCase,
-        _generateAndStorePinUseCase = generateAndStorePinUseCase,
+        _endTripWithZoneCheckUseCase = endTripWithZoneCheckUseCase,
         super(const TripInitial()) {
     on<TripCheckActiveRequested>(_onCheckActive);
     on<TripStartRequested>(_onStartTrip);
@@ -45,7 +39,6 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     on<TripLocationUpdated>(_onLocationUpdated);
     on<RequestRemoteClosureEvent>(_onRequestRemoteClosure);
     on<ApprovalStreamUpdatedEvent>(_onApprovalStreamUpdated);
-    on<VerifyManualPinEvent>(_onVerifyManualPin);
   }
 
   final StartTripUseCase _startTripUseCase;
@@ -55,20 +48,16 @@ class TripBloc extends Bloc<TripEvent, TripState> {
 
   final RequestRemoteClosureUseCase _requestRemoteClosureUseCase;
   final ListenToApprovalStreamUseCase _listenToApprovalStreamUseCase;
-  final VerifyManualPinUseCase _verifyManualPinUseCase;
-  final StopMonitoringAndFinalizeUseCase _stopMonitoringAndFinalizeUseCase;
-  final GenerateAndStorePinUseCase _generateAndStorePinUseCase;
+  final EndTripWithZoneCheckUseCase _endTripWithZoneCheckUseCase;
 
   Timer? _timer;
   Timer? _inactivityTimer;
   StreamSubscription<Position>? _positionSub;
   StreamSubscription? _approvalSubscription;
 
-  // Auto-end trip after 20 min with no GPS movement
   static const _inactivityTimeout = Duration(minutes: 20);
 
   // ── Timer ────────────────────────────────────────────────────────────────────
-
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -81,14 +70,11 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     _timer = null;
   }
 
-  // ── Inactivity timer ──────────────────────────────────────────────────────────
-
+  // ── Inactivity timer ───────────────────────────────────────────────────────
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
     _inactivityTimer = Timer(_inactivityTimeout, () {
-      if (state is TripActive) {
-        add(TripEndRequested(tripId: (state as TripActive).trip.id));
-      }
+      add(TripEndRequested(tripId: (state as TripActive).trip.id));
     });
   }
 
@@ -97,40 +83,29 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     _inactivityTimer = null;
   }
 
-  // ── GPS ──────────────────────────────────────────────────────────────────────
-
+  // ── Location ────────────────────────────────────────────────────────────────
   Future<void> _startLocationTracking() async {
-    await _positionSub?.cancel();
-
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return; // trip continues without GPS tracking
-    }
-
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 20, // meters — update every 20m moved
-    );
-
-    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
-        .listen((position) {
-      add(TripLocationUpdated(lat: position.latitude, lng: position.longitude));
-    });
+    _positionSub?.cancel();
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      ).listen((pos) {
+        add(TripLocationUpdated(lat: pos.latitude, lng: pos.longitude));
+      });
+    } catch (_) {}
   }
 
   void _stopLocationTracking() {
     _positionSub?.cancel();
     _positionSub = null;
-  }
-
-  @override
-  Future<void> close() {
-    _stopTimer();
-    _stopLocationTracking();
-    _stopInactivityTimer();
-    _approvalSubscription?.cancel();
-    return super.close();
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -148,6 +123,10 @@ class TripBloc extends Bloc<TripEvent, TripState> {
       (trip) {
         if (trip == null) {
           emit(const TripIdle());
+        } else if (trip.status == TripStatus.pending) {
+          emit(TripPending(trip: trip));
+        } else if (trip.status == TripStatus.pendingApproval) {
+          emit(TripPendingApproval(trip: trip));
         } else {
           emit(TripActive(trip: trip, elapsed: trip.elapsed));
           _startTimer();
@@ -169,22 +148,14 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         hasCameraPermission: event.hasCameraPermission,
       ),
     );
+
     result.fold(
       (failure) => emit(TripError(message: failure.message)),
-      (trip) async {
-        // Generate and store PIN for contingency closure
-        final pinResult = await _generateAndStorePinUseCase(trip.id);
-        
-        pinResult.fold(
-          (failure) => emit(TripError(message: 'Error al generar PIN: ${failure.message}')),
-          (_) {
-            emit(TripActive(
-                trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
-            _startTimer();
-            _startLocationTracking();
-            _resetInactivityTimer();
-          },
-        );
+      (trip) {
+        emit(TripActive(trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
+        _startTimer();
+        _startLocationTracking();
+        _resetInactivityTimer();
       },
     );
   }
@@ -193,131 +164,76 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     TripEndRequested event,
     Emitter<TripState> emit,
   ) async {
-    emit(TripClosureLoading());
-    await _finalizeAndEmit(event.tripId, emit);
+    if (state is TripActive) {
+      await _finalizeAndEmit(event.tripId, emit);
+    } else if (state is TripPendingApproval) {
+      emit(const TripIdle());
+    }
   }
 
   void _onTick(TripTick event, Emitter<TripState> emit) {
     if (state is TripActive) {
       final current = state as TripActive;
+      if (current.trip.closureRequestedAt != null) {
+        return;
+      }
       emit(current.copyWith(elapsed: current.trip.elapsed));
     }
   }
 
-  Future<void> _onLocationUpdated(
+  void _onLocationUpdated(
     TripLocationUpdated event,
     Emitter<TripState> emit,
-  ) async {
-    if (state is! TripActive) return;
-    final current = state as TripActive;
-
-    // Save to Firestore (fire-and-forget — errors are silently ignored)
-    _saveRoutePointUseCase(
-      SaveRoutePointParams(
-        tripId: current.trip.id,
-        lat: event.lat,
-        lng: event.lng,
-      ),
-    );
-
-    // Reset inactivity timer — driver is still moving
-    _resetInactivityTimer();
-
-    // Update local route for map display
-    final updatedRoute = List<LatLng>.from(current.route)
-      ..add(LatLng(event.lat, event.lng));
-
-    emit(current.copyWith(route: updatedRoute));
+  ) {
+    if (state is TripActive) {
+      final current = state as TripActive;
+      final newRoute = [...?current.route, LatLng(event.lat, event.lng)];
+      emit(current.copyWith(route: newRoute));
+      _resetInactivityTimer();
+    }
   }
-
-  // --- Cierre de viaje ---
 
   Future<void> _onRequestRemoteClosure(
     RequestRemoteClosureEvent event,
     Emitter<TripState> emit,
   ) async {
     if (state is! TripActive) return;
-    
-    emit(TripClosureLoading());
 
-    final result = await _requestRemoteClosureUseCase(event.tripId);
-
-    if (state is! TripActive) return;
     final currentState = state as TripActive;
 
+    final result = await _requestRemoteClosureUseCase(event.tripId);
     result.fold(
       (failure) => emit(TripClosureError(message: failure.message)),
       (_) {
-        // En vez de emitir TripClosureRequested y bloquear, 
-        // actualizamos la entidad del viaje en el estado activo.
-        final updatedTrip = TripEntity(
-          id: currentState.trip.id,
-          driverId: currentState.trip.driverId,
-          startTime: currentState.trip.startTime,
-          hasCameraPermission: currentState.trip.hasCameraPermission,
-          status: currentState.trip.status,
-          endTime: currentState.trip.endTime,
-          endTripPin: currentState.trip.endTripPin,
-          closureRequestedAt: DateTime.now(), // Marcamos la hora de solicitud
-          isClosureApproved: false,
+        final updatedTrip = currentState.trip.copyWith(
+          closureRequestedAt: DateTime.now(),
         );
-
         emit(currentState.copyWith(trip: updatedTrip));
-        
+
         _approvalSubscription?.cancel();
-        _approvalSubscription =
-            _listenToApprovalStreamUseCase(event.tripId).listen(
+        _approvalSubscription = _listenToApprovalStreamUseCase(event.tripId).listen(
           (result) {
             result.fold(
-                (failure) =>
-                    add(const ApprovalStreamUpdatedEvent(isApproved: false)),
-                (tripFromStream) {
-              if (tripFromStream.isClosureApproved) {
-                add(ApprovalStreamUpdatedEvent(
-                    isApproved: true, tripId: tripFromStream.id));
-              }
-            });
+              (failure) {},
+              (trip) {
+                if (trip.isClosureApproved) {
+                  add(ApprovalStreamUpdatedEvent(isApproved: true, tripId: event.tripId));
+                }
+              },
+            );
           },
         );
       },
     );
   }
 
-  Future<void> _onApprovalStreamUpdated(
+  void _onApprovalStreamUpdated(
     ApprovalStreamUpdatedEvent event,
     Emitter<TripState> emit,
   ) async {
-    if (event.isApproved && event.tripId != null) {
-      if (state is TripActive) {
-        emit(TripClosureLoading());
-        await _finalizeAndEmit(event.tripId!, emit);
-      }
+    if (event.isApproved) {
+      await _finalizeAndEmit(event.tripId!, emit);
     }
-  }
-
-  Future<void> _onVerifyManualPin(
-    VerifyManualPinEvent event,
-    Emitter<TripState> emit,
-  ) async {
-    final prevState = state;
-    emit(TripClosureLoading());
-
-    final result = await _verifyManualPinUseCase(event.pin);
-
-    await result.fold(
-      (failure) async {
-        if (prevState is TripActive) emit(prevState);
-        emit(TripClosureError(message: failure.message));
-      },
-      (isValid) async {
-        if (isValid) {
-          await _finalizeAndEmit(event.tripId, emit);
-        } else {
-          if (prevState is TripActive) emit(prevState);
-          emit(const TripClosureError(message: 'PIN incorrecto'));
-        }
-      },
-    );
   }
 
   Future<void> _finalizeAndEmit(String tripId, Emitter<TripState> emit) async {
@@ -326,23 +242,32 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     _stopLocationTracking();
     _stopInactivityTimer();
 
-    final result = await _stopMonitoringAndFinalizeUseCase(tripId);
+    final result = await _endTripWithZoneCheckUseCase(tripId);
 
     result.fold(
-      (failure) => emit(TripClosureError(message: failure.message)),
-      (_) {
-        // Emit TripEnded so navigation works correctly
-        // Create a minimal trip entity for navigation
-        final trip = TripEntity(
-          id: tripId,
-          driverId: '',
-          startTime: DateTime.now(),
-          hasCameraPermission: false,
-          status: TripStatus.completed,
-          endTime: DateTime.now(),
-        );
-        emit(TripEnded(trip: trip));
+      (failure) {
+        if (failure.message.contains('Permiso') || failure.message.contains('ubicación')) {
+          emit(TripClosureError(message: 'Se requiere permiso de ubicación para finalizar el viaje.'));
+        } else {
+          emit(TripClosureError(message: failure.message));
+        }
+      },
+      (trip) {
+        if (trip.status == TripStatus.pendingApproval) {
+          emit(TripPendingApproval(trip: trip));
+        } else {
+          emit(TripEnded(trip: trip));
+        }
       },
     );
+  }
+
+  @override
+  Future<void> close() {
+    _timer?.cancel();
+    _inactivityTimer?.cancel();
+    _positionSub?.cancel();
+    _approvalSubscription?.cancel();
+    return super.close();
   }
 }

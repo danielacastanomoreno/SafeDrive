@@ -22,6 +22,15 @@ class TripIdle extends TripState {
   const TripIdle();
 }
 
+class TripPending extends TripState {
+  const TripPending({required this.trip});
+
+  final TripEntity trip;
+
+  @override
+  List<Object?> get props => [trip];
+}
+
 class TripActive extends TripState {
   const TripActive({
     required this.trip,
@@ -59,6 +68,14 @@ class TripActive extends TripState {
 
 class TripEnded extends TripState {
   const TripEnded({required this.trip});
+  final TripEntity trip;
+
+  @override
+  List<Object?> get props => [trip];
+}
+
+class TripPendingApproval extends TripState {
+  const TripPendingApproval({required this.trip});
   final TripEntity trip;
 
   @override

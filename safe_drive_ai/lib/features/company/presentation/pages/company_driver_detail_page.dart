@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -136,6 +137,19 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
             },
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          context.push('/company/create-trip', extra: {
+            'companyId': widget.link.companyId,
+            'driverId': widget.profile.id,
+            'driverName': widget.profile.name,
+          });
+        },
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.textOnPrimary,
+        icon: const Icon(Icons.add_location_alt),
+        label: const Text('Crear Viaje'),
       ),
     );
   }
@@ -319,6 +333,10 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
     switch (status) {
       case TripStatus.active:
         return AppColors.primary;
+      case TripStatus.pending:
+        return AppColors.warning;
+      case TripStatus.pendingApproval:
+        return AppColors.warning;
       case TripStatus.onBreak:
         return AppColors.warning;
       case TripStatus.completed:
@@ -330,6 +348,10 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
     switch (status) {
       case TripStatus.active:
         return 'En curso';
+      case TripStatus.pending:
+        return 'Pendiente';
+      case TripStatus.pendingApproval:
+        return 'Esperando aprobación';
       case TripStatus.onBreak:
         return 'En pausa';
       case TripStatus.completed:

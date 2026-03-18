@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/app_colors.dart';
@@ -211,40 +212,11 @@ class _PendingTripCardState extends State<_PendingTripCard> {
     }
   }
 
-  void _approveTrip(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Aprobar cierre de viaje'),
-        content: const Text(
-          '¿Estás seguro de que deseas aprobar y cerrar este viaje remotamente?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              context.read<CompanyBloc>().add(
-                    CompanyTripClosureApproved(
-                      tripId: widget.trip.id,
-                      companyId: widget.companyId,
-                    ),
-                  );
-            },
-            child: const Text(
-              'Aprobar',
-              style: TextStyle(color: AppColors.success),
-            ),
-          ),
-        ],
-      ),
-    );
+  void _showTripDetails(BuildContext context) {
+    context.push('/company/trip-approval', extra: {
+      'trip': widget.trip,
+      'companyId': widget.companyId,
+    });
   }
 
   String _formatDate(DateTime date) {
@@ -340,11 +312,11 @@ class _PendingTripCardState extends State<_PendingTripCard> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _approveTrip(context),
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Aprobar Cierre'),
+                onPressed: () => _showTripDetails(context),
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Ver Detalles'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.textOnPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

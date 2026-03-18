@@ -14,9 +14,7 @@ import '../../../trips/domain/usecases/save_route_point_usecase.dart';
 import '../../../trips/domain/usecases/start_trip_usecase.dart';
 import '../../../trips/domain/usecases/request_remote_closure_usecase.dart';
 import '../../../trips/domain/usecases/listen_to_approval_stream_usecase.dart';
-import '../../../trips/domain/usecases/verify_manual_pin_usecase.dart';
-import '../../../trips/domain/usecases/stop_monitoring_and_finalize_usecase.dart';
-import '../../../trips/domain/usecases/generate_and_store_pin_usecase.dart';
+import '../../../trips/domain/usecases/end_trip_with_zone_check_usecase.dart';
 import '../../../trips/presentation/bloc/trip_bloc.dart';
 import '../../../trips/presentation/bloc/trip_event.dart';
 import '../../../trips/presentation/bloc/trip_state.dart';
@@ -64,9 +62,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
       saveRoutePointUseCase: sl<SaveRoutePointUseCase>(),
       requestRemoteClosureUseCase: sl<RequestRemoteClosureUseCase>(),
       listenToApprovalStreamUseCase: sl<ListenToApprovalStreamUseCase>(),
-      verifyManualPinUseCase: sl<VerifyManualPinUseCase>(),
-      stopMonitoringAndFinalizeUseCase: sl<StopMonitoringAndFinalizeUseCase>(),
-      generateAndStorePinUseCase: sl<GenerateAndStorePinUseCase>(),
+      endTripWithZoneCheckUseCase: sl<EndTripWithZoneCheckUseCase>(),
     )..add(TripCheckActiveRequested(driverId: widget.driver.id));
   }
 

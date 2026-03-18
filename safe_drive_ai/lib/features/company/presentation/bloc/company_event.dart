@@ -168,3 +168,17 @@ class CompanyTripClosureApproved extends CompanyEvent {
   List<Object?> get props => [tripId, companyId];
 }
 
+/// Solicita rechazar el cierre de un viaje.
+class CompanyTripClosureRejected extends CompanyEvent {
+  const CompanyTripClosureRejected({
+    required this.tripId,
+    required this.companyId,
+  });
+
+  final String tripId;
+  final String companyId;
+
+  @override
+  List<Object?> get props => [tripId, companyId];
+}
+

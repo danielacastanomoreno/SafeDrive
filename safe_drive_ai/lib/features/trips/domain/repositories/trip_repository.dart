@@ -24,7 +24,5 @@ abstract class TripRepository {
   // Cierre de viaje
   Future<Either<Failure, void>> requestRemoteClosure(String tripId);
   Stream<Either<Failure, TripEntity>> listenToApprovalStream(String tripId);
-  Future<Either<Failure, bool>> verifyManualPin(String inputPin);
-  Future<Either<Failure, void>> stopMonitoringAndFinalize(String tripId);
-  Future<Either<Failure, void>> generateAndStorePin(String tripId);
+  Future<Either<Failure, TripEntity>> endTripWithZoneCheck(String tripId);
 }

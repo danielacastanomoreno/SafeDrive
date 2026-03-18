@@ -8,6 +8,7 @@ import '../../../auth/data/models/company_model.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../../auth/domain/entities/company_entity.dart';
 import '../../../trips/data/models/trip_model.dart';
+import '../../../trips/domain/entities/trip_entity.dart';
 import '../models/invitation_model.dart';
 import 'company_datasource.dart';
 
@@ -299,6 +300,50 @@ class CompanyDatasourceImpl implements CompanyDatasource {
   Future<void> approveTripClosure(String tripId) async {
     await _firestore.collection('trips').doc(tripId).update({
       'isClosureApproved': true,
+    });
+  }
+
+  @override
+  Future<TripModel> createTripWithDestination({
+    required String companyId,
+    required String driverId,
+    required double destinationLat,
+    required double destinationLng,
+    required String destinationAddress,
+  }) async {
+    final now = DateTime.now();
+    final docRef = await _firestore.collection('trips').add({
+      'driverId': driverId,
+      'companyId': companyId,
+      'startTime': null,
+      'endTime': null,
+      'hasCameraPermission': false,
+      'status': 'pending',
+      'destinationLat': destinationLat,
+      'destinationLng': destinationLng,
+      'destinationAddress': destinationAddress,
+      'isOutOfZone': false,
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    return TripModel(
+      id: docRef.id,
+      driverId: driverId,
+      startTime: now,
+      hasCameraPermission: false,
+      status: TripStatus.pending,
+      destinationLat: destinationLat,
+      destinationLng: destinationLng,
+      destinationAddress: destinationAddress,
+    );
+  }
+
+  @override
+  Future<void> rejectTripClosure(String tripId) async {
+    await _firestore.collection('trips').doc(tripId).update({
+      'status': 'completed',
+      'isClosureApproved': false,
+      'rejectedAt': Timestamp.fromDate(DateTime.now()),
     });
   }
 }

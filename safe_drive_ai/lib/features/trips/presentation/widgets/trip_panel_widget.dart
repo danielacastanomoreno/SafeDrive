@@ -112,6 +112,12 @@ class TripPanelWidget extends StatelessWidget {
           );
         }
 
+        if (state is TripPending) {
+          return _PendingTripPanel(
+            onStart: () => _onStartPressed(context),
+          );
+        }
+
         return _IdleTripPanel(
           onStart: () => _onStartPressed(context),
           error: state is TripError ? state.message : null,
@@ -195,6 +201,65 @@ class _IdleTripPanel extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PendingTripPanel extends StatelessWidget {
+  const _PendingTripPanel({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: AppColors.warning,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          const Icon(Icons.assignment, color: Colors.white, size: 22),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Viaje asignado',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'Presiona iniciar para aceptar',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: onStart,
+            icon: const Icon(Icons.play_arrow, size: 18),
+            label: const Text('Iniciar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.warning,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              textStyle: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

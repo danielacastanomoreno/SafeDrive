@@ -57,5 +57,17 @@ abstract class CompanyDatasource {
 
   /// Aprueba el cierre remoto de un viaje
   Future<void> approveTripClosure(String tripId);
+
+  /// Rechaza el cierre de un viaje
+  Future<void> rejectTripClosure(String tripId);
+
+  /// Crea un viaje pendiente para un conductor con destino pactado
+  Future<TripModel> createTripWithDestination({
+    required String companyId,
+    required String driverId,
+    required double destinationLat,
+    required double destinationLng,
+    required String destinationAddress,
+  });
 }
 

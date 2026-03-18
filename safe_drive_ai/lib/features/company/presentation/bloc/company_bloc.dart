@@ -9,6 +9,7 @@ import '../../domain/usecases/unlink_driver_usecase.dart';
 import '../../domain/usecases/update_company_profile_usecase.dart';
 import '../../domain/usecases/get_pending_trips_usecase.dart';
 import '../../domain/usecases/approve_trip_closure_usecase.dart';
+import '../../domain/usecases/reject_trip_closure_usecase.dart';
 import 'company_event.dart';
 import 'company_state.dart';
 
@@ -26,6 +27,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     required RegisterDriverByCompanyUseCase registerDriverByCompanyUseCase,
     required GetPendingTripsUseCase getPendingTripsUseCase,
     required ApproveTripClosureUseCase approveTripClosureUseCase,
+    required RejectTripClosureUseCase rejectTripClosureUseCase,
   })  : _getCompanyDriversUseCase = getCompanyDriversUseCase,
         _unlinkDriverUseCase = unlinkDriverUseCase,
         _sendInvitationUseCase = sendInvitationUseCase,
@@ -35,6 +37,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
         _registerDriverByCompanyUseCase = registerDriverByCompanyUseCase,
         _getPendingTripsUseCase = getPendingTripsUseCase,
         _approveTripClosureUseCase = approveTripClosureUseCase,
+        _rejectTripClosureUseCase = rejectTripClosureUseCase,
         super(const CompanyInitial()) {
     on<CompanyDriversRequested>(_onDriversRequested);
     on<CompanyDriverUnlinkRequested>(_onDriverUnlinkRequested);
@@ -46,6 +49,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
     on<CompanyDriverRegisterRequested>(_onDriverRegisterRequested);
     on<CompanyPendingTripsRequested>(_onPendingTripsRequested);
     on<CompanyTripClosureApproved>(_onTripClosureApproved);
+    on<CompanyTripClosureRejected>(_onTripClosureRejected);
   }
 
   final GetCompanyDriversUseCase _getCompanyDriversUseCase;
@@ -57,6 +61,7 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
   final RegisterDriverByCompanyUseCase _registerDriverByCompanyUseCase;
   final GetPendingTripsUseCase _getPendingTripsUseCase;
   final ApproveTripClosureUseCase _approveTripClosureUseCase;
+  final RejectTripClosureUseCase _rejectTripClosureUseCase;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -293,6 +298,31 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
           ),
         );
         // Recargar la lista de viajes pendientes
+        final pendingResult = await _getPendingTripsUseCase(event.companyId);
+        pendingResult.fold(
+          (failure) => emit(CompanyError(message: failure.message)),
+          (pendingTrips) => emit(CompanyPendingTripsLoaded(pendingTrips: pendingTrips)),
+        );
+      },
+    );
+  }
+
+  Future<void> _onTripClosureRejected(
+    CompanyTripClosureRejected event,
+    Emitter<CompanyState> emit,
+  ) async {
+    emit(const CompanyLoading());
+
+    final result = await _rejectTripClosureUseCase(event.tripId);
+
+    await result.fold(
+      (failure) async => emit(CompanyError(message: failure.message)),
+      (_) async {
+        emit(
+          const CompanyActionSuccess(
+            message: 'Cierre de viaje rechazado.',
+          ),
+        );
         final pendingResult = await _getPendingTripsUseCase(event.companyId);
         pendingResult.fold(
           (failure) => emit(CompanyError(message: failure.message)),

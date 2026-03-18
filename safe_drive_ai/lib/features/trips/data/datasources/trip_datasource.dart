@@ -21,7 +21,11 @@ abstract class TripDatasource {
   // Cierre de viaje
   Future<void> requestRemoteClosure(String tripId);
   Stream<TripModel> listenToApprovalStream(String tripId);
-  Future<String?> getEndTripPin();
-  Future<void> setEndTripPin(String pin);
-  Future<void> finalizeLocalTrip();
+  Stream<List<TripModel>> listenToPendingTrips(String driverId);
+
+  Future<TripModel> endTripWithZoneCheck({
+    required String tripId,
+    required double currentLat,
+    required double currentLng,
+  });
 }
