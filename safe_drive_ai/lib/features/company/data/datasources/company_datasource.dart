@@ -68,6 +68,7 @@ abstract class CompanyDatasource {
     required double destinationLat,
     required double destinationLng,
     required String destinationAddress,
+    DateTime? scheduledStartTime,
   });
 }
 

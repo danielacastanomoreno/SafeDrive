@@ -310,9 +310,10 @@ class CompanyDatasourceImpl implements CompanyDatasource {
     required double destinationLat,
     required double destinationLng,
     required String destinationAddress,
+    DateTime? scheduledStartTime,
   }) async {
     final now = DateTime.now();
-    final docRef = await _firestore.collection('trips').add({
+    final tripData = <String, dynamic>{
       'driverId': driverId,
       'companyId': companyId,
       'startTime': null,
@@ -324,7 +325,13 @@ class CompanyDatasourceImpl implements CompanyDatasource {
       'destinationAddress': destinationAddress,
       'isOutOfZone': false,
       'createdAt': Timestamp.fromDate(now),
-    });
+    };
+
+    if (scheduledStartTime != null) {
+      tripData['scheduledStartTime'] = Timestamp.fromDate(scheduledStartTime);
+    }
+
+    final docRef = await _firestore.collection('trips').add(tripData);
 
     return TripModel(
       id: docRef.id,
@@ -335,6 +342,7 @@ class CompanyDatasourceImpl implements CompanyDatasource {
       destinationLat: destinationLat,
       destinationLng: destinationLng,
       destinationAddress: destinationAddress,
+      scheduledStartTime: scheduledStartTime,
     );
   }
 

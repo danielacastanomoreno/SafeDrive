@@ -20,6 +20,7 @@ class CreateTripWithDestinationUseCase
       destinationLat: params.destinationLat,
       destinationLng: params.destinationLng,
       destinationAddress: params.destinationAddress,
+      scheduledStartTime: params.scheduledStartTime,
     );
   }
 }
@@ -31,6 +32,7 @@ class CreateTripWithDestinationParams {
     required this.destinationLat,
     required this.destinationLng,
     required this.destinationAddress,
+    this.scheduledStartTime,
   });
 
   final String companyId;
@@ -38,4 +40,5 @@ class CreateTripWithDestinationParams {
   final double destinationLat;
   final double destinationLng;
   final String destinationAddress;
+  final DateTime? scheduledStartTime;
 }

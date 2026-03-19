@@ -16,6 +16,7 @@ class TripModel extends TripEntity {
     super.destinationLng,
     super.destinationAddress,
     super.isOutOfZone,
+    super.scheduledStartTime,
   });
 
   factory TripModel.fromMap(String id, Map<String, dynamic> map) {
@@ -42,6 +43,9 @@ class TripModel extends TripEntity {
       destinationLng: map['destinationLng'] as double?,
       destinationAddress: map['destinationAddress'] as String?,
       isOutOfZone: map['isOutOfZone'] as bool? ?? false,
+      scheduledStartTime: map['scheduledStartTime'] != null
+          ? (map['scheduledStartTime'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -64,5 +68,7 @@ class TripModel extends TripEntity {
         if (destinationLng != null) 'destinationLng': destinationLng,
         if (destinationAddress != null) 'destinationAddress': destinationAddress,
         'isOutOfZone': isOutOfZone,
+        if (scheduledStartTime != null)
+          'scheduledStartTime': Timestamp.fromDate(scheduledStartTime!),
       };
 }

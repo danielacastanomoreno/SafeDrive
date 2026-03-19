@@ -16,6 +16,7 @@ class TripEntity extends Equatable {
     this.destinationLng,
     this.destinationAddress,
     this.isOutOfZone = false,
+    this.scheduledStartTime,
   });
 
   final String id;
@@ -30,8 +31,20 @@ class TripEntity extends Equatable {
   final double? destinationLng;
   final String? destinationAddress;
   final bool isOutOfZone;
+  final DateTime? scheduledStartTime;
 
   bool get hasDestination => destinationLat != null && destinationLng != null;
+
+  bool get isScheduled => scheduledStartTime != null;
+
+  bool get canStartNow {
+    if (scheduledStartTime == null) return true;
+    return DateTime.now().isAfter(scheduledStartTime!) || 
+           DateTime.now().isAtSameMomentAs(scheduledStartTime!);
+  }
+
+  bool get isPending => status == TripStatus.pending;
+  bool get isActive => status == TripStatus.active;
 
   Duration get elapsed {
     final end = endTime ?? DateTime.now();
@@ -51,6 +64,7 @@ class TripEntity extends Equatable {
     double? destinationLng,
     String? destinationAddress,
     bool? isOutOfZone,
+    DateTime? scheduledStartTime,
   }) {
     return TripEntity(
       id: id ?? this.id,
@@ -65,6 +79,7 @@ class TripEntity extends Equatable {
       destinationLng: destinationLng ?? this.destinationLng,
       destinationAddress: destinationAddress ?? this.destinationAddress,
       isOutOfZone: isOutOfZone ?? this.isOutOfZone,
+      scheduledStartTime: scheduledStartTime ?? this.scheduledStartTime,
     );
   }
 
@@ -82,5 +97,6 @@ class TripEntity extends Equatable {
         destinationLng,
         destinationAddress,
         isOutOfZone,
+        scheduledStartTime,
       ];
 }

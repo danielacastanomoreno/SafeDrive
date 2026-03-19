@@ -220,6 +220,7 @@ class CompanyRepositoryImpl implements CompanyRepository {
     required double destinationLat,
     required double destinationLng,
     required String destinationAddress,
+    DateTime? scheduledStartTime,
   }) async {
     try {
       final trip = await _datasource.createTripWithDestination(
@@ -228,6 +229,7 @@ class CompanyRepositoryImpl implements CompanyRepository {
         destinationLat: destinationLat,
         destinationLng: destinationLng,
         destinationAddress: destinationAddress,
+        scheduledStartTime: scheduledStartTime,
       );
       return Right(trip);
     } on FirestoreException catch (e) {
