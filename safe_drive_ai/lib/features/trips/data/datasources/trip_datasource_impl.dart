@@ -16,6 +16,7 @@ class TripDatasourceImpl implements TripDatasource {
   Future<TripModel> startTrip({
     required String driverId,
     required bool hasCameraPermission,
+    required DateTime startedAt,
   }) async {
     // Check for existing active trips
     final existing = await _firestore
@@ -40,7 +41,7 @@ class TripDatasourceImpl implements TripDatasource {
     if (pending.docs.isNotEmpty) {
       // Accept the pending trip - change status to active
       final docRef = pending.docs.first.reference;
-      final now = DateTime.now();
+      final now = startedAt;
       await docRef.update({
         'startTime': Timestamp.fromDate(now),
         'hasCameraPermission': hasCameraPermission,
@@ -58,7 +59,7 @@ class TripDatasourceImpl implements TripDatasource {
     }
 
     // No existing trip - create a new one
-    final now = DateTime.now();
+    final now = startedAt;
     final docRef = await _firestore.collection('trips').add({
       'driverId': driverId,
       'startTime': Timestamp.fromDate(now),
@@ -77,13 +78,16 @@ class TripDatasourceImpl implements TripDatasource {
   }
 
   @override
-  Future<TripModel> endTrip(String tripId) async {
+  Future<TripModel> endTrip({
+    required String tripId,
+    required DateTime endedAt,
+  }) async {
     final doc = await _firestore.collection('trips').doc(tripId).get();
     if (!doc.exists) {
       throw DocumentNotFoundException('No se encontró el viaje $tripId.');
     }
 
-    final now = DateTime.now();
+    final now = endedAt;
     await _firestore.collection('trips').doc(tripId).update({
       'endTime': Timestamp.fromDate(now),
       'status': 'completed',

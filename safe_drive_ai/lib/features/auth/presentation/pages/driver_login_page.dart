@@ -37,10 +37,13 @@ class _DriverLoginPageState extends State<DriverLoginPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final normalizedEmail = _emailController.text.trim().toLowerCase();
+    final normalizedPassword = _passwordController.text.trim();
+
     context.read<AuthBloc>().add(
           AuthDriverLoginRequested(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
+            email: normalizedEmail,
+            password: normalizedPassword,
           ),
         );
   }

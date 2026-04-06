@@ -41,7 +41,7 @@ class _SelectCompanyPageState extends State<SelectCompanyPage> {
         body: BlocListener<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthDriverAuthenticated) {
-              context.go('/driver/home');
+              context.go('/driver/home', extra: state);
             }
           },
           child: _buildBody(context),
@@ -56,6 +56,12 @@ class _SelectCompanyPageState extends State<SelectCompanyPage> {
 
     if (state is AuthCompanySelectionRequired) {
       companies = state.companies;
+    } else if (state is AuthDriverAuthenticated) {
+      // Si el conductor no requiere selección de empresa, debe continuar a home.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/driver/home', extra: state);
+      });
+      return const SizedBox.shrink();
     } else {
       // Estado inesperado: redirige a selección de rol.
       WidgetsBinding.instance.addPostFrameCallback((_) {

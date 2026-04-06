@@ -4,8 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/trip_bloc.dart';
 import '../bloc/trip_event.dart';
 import '../bloc/trip_state.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_state.dart';
 
 class EndTripDialog extends StatefulWidget {
   final String tripId;
@@ -21,12 +19,8 @@ class _EndTripDialogState extends State<EndTripDialog> {
   Widget build(BuildContext context) {
     return BlocConsumer<TripBloc, TripState>(
       listener: (context, state) {
-        if (state is TripEnded || state is TripPendingApproval) {
+        if (state is TripEnded) {
           Navigator.of(context).pop(true);
-        } else if (state is TripClosureError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
         } else if (state is TripError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message)),
@@ -34,55 +28,39 @@ class _EndTripDialogState extends State<EndTripDialog> {
         }
       },
       builder: (context, state) {
-        final authState = context.read<AuthBloc>().state;
-        final hasCompany = authState is AuthDriverAuthenticated && authState.companies.isNotEmpty;
-
-        final isLoading = state is TripClosureLoading || state is TripClosureRequested || state is TripLoading;
+        final isLoading = state is TripLoading;
 
         return AlertDialog(
-          title: const Text('Finalizar Viaje'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (state is TripActive && state.trip.closureRequestedAt != null) ...[
-                const SizedBox(height: 16),
-                const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 16),
-                const Text(
-                  'El cierre está pendiente de aprobación por la empresa.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Puedes esperar la aprobación o finalizar sin ella.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ] else if (!hasCompany) ...[
-                const Text('¿Está seguro de que desea finalizar el viaje?'),
-              ] else ...[
-                const Text('Solicite autorización para terminar el viaje de forma segura.'),
-              ],
-            ],
-          ),
+          title: const Text('Finalizar viaje'),
+          content: const Text('¿Confirmas que quieres finalizar el viaje?'),
           actions: [
-            if (!isLoading)
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancelar'),
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      context.read<TripBloc>().add(
+                            TripEndRequested(
+                              tripId: widget.tripId,
+                              endedAt: DateTime.now(),
+                            ),
+                          );
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
               ),
-            if (!isLoading)
-              ElevatedButton(
-                onPressed: () {
-                  context.read<TripBloc>().add(TripEndRequested(tripId: widget.tripId));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(hasCompany ? 'Finalizar Sin Aprobación' : 'Finalizar'),
-              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Sí, finalizar'),
+            ),
           ],
         );
       },

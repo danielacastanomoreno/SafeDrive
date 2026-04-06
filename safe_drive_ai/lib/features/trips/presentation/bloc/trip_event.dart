@@ -19,20 +19,26 @@ class TripStartRequested extends TripEvent {
   const TripStartRequested({
     required this.driverId,
     required this.hasCameraPermission,
+    required this.startedAt,
   });
   final String driverId;
   final bool hasCameraPermission;
+  final DateTime startedAt;
 
   @override
-  List<Object?> get props => [driverId, hasCameraPermission];
+  List<Object?> get props => [driverId, hasCameraPermission, startedAt];
 }
 
 class TripEndRequested extends TripEvent {
-  const TripEndRequested({required this.tripId});
+  const TripEndRequested({
+    required this.tripId,
+    required this.endedAt,
+  });
   final String tripId;
+  final DateTime endedAt;
 
   @override
-  List<Object?> get props => [tripId];
+  List<Object?> get props => [tripId, endedAt];
 }
 
 /// Internal — dispatched every second by the Timer.

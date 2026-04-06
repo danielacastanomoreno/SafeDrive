@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/domain/entities/company_entity.dart';
+import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/auth/presentation/pages/company_login_page.dart';
 import '../../features/auth/presentation/pages/company_register_page.dart';
@@ -70,23 +72,38 @@ class AppRouter {
         path: '/driver/home',
         builder: (context, state) {
           final authState = state.extra as AuthDriverAuthenticated?;
-          if (authState == null) {
-            return const RoleSelectionPage();
+          if (authState != null) {
+            return DriverHomePage(
+              driver: authState.user,
+              companies: authState.companies,
+            );
           }
-          return DriverHomePage(
-            driver: authState.user,
-            companies: authState.companies,
-          );
+
+          final currentAuthState = context.read<AuthBloc>().state;
+          if (currentAuthState is AuthDriverAuthenticated) {
+            return DriverHomePage(
+              driver: currentAuthState.user,
+              companies: currentAuthState.companies,
+            );
+          }
+
+          return const RoleSelectionPage();
         },
       ),
       GoRoute(
         path: '/company/home',
         builder: (context, state) {
           final company = state.extra as CompanyEntity?;
-          if (company == null) {
-            return const RoleSelectionPage();
+          if (company != null) {
+            return CompanyHomePage(company: company);
           }
-          return CompanyHomePage(company: company);
+
+          final currentAuthState = context.read<AuthBloc>().state;
+          if (currentAuthState is AuthCompanyAuthenticated) {
+            return CompanyHomePage(company: currentAuthState.company);
+          }
+
+          return const RoleSelectionPage();
         },
       ),
       GoRoute(

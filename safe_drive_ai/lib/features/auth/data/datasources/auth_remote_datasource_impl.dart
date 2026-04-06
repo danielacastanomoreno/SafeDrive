@@ -30,9 +30,12 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
 
   @override
   Future<UserModel> loginDriver(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedPassword = password.trim();
+
     final credential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
+      email: normalizedEmail,
+      password: normalizedPassword,
     );
     final uid = credential.user!.uid;
     final doc = await _firestore.collection('users').doc(uid).get();
@@ -46,14 +49,18 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       throw const AuthException(
           'Acceso denegado: esta cuenta no es de conductor.');
     }
+    await saveSession(uid, 'driver', null);
     return UserModel.fromMap(uid, data);
   }
 
   @override
   Future<CompanyModel> loginCompany(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedPassword = password.trim();
+
     final credential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
+      email: normalizedEmail,
+      password: normalizedPassword,
     );
     final uid = credential.user!.uid;
     final doc = await _firestore.collection('companies').doc(uid).get();
@@ -67,6 +74,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       throw const AuthException(
           'Acceso denegado: esta cuenta no es de empresa.');
     }
+    await saveSession(uid, 'company', null);
     return CompanyModel.fromMap(uid, data);
   }
 
@@ -104,6 +112,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
     );
 
     await _firestore.collection('companies').doc(uid).set(model.toMap());
+    await saveSession(uid, 'company', null);
 
     return model;
   }
@@ -141,6 +150,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
       );
 
       await _firestore.collection('users').doc(uid).set(model.toMap());
+      await saveSession(uid, 'driver', null);
       return model;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
@@ -231,10 +241,19 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
     String role,
     String? activeCompanyId,
   ) async {
+    final previousUserId = _prefs.getString(_keyUserId);
+
     await _prefs.setString(_keyUserId, userId);
     await _prefs.setString(_keyUserRole, role);
+
     if (activeCompanyId != null) {
       await _prefs.setString(_keyActiveCompanyId, activeCompanyId);
+      return;
+    }
+
+    // Mantiene la empresa activa solo para el mismo conductor.
+    if (role != 'driver' || previousUserId != userId) {
+      await _prefs.remove(_keyActiveCompanyId);
     }
   }
 

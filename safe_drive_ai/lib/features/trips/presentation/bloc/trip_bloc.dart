@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../core/services/foreground_task_service.dart';
 import '../../domain/entities/trip_entity.dart';
 import '../../domain/usecases/end_trip_usecase.dart';
 import '../../domain/usecases/get_active_trip_usecase.dart';
@@ -24,6 +25,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     required RequestRemoteClosureUseCase requestRemoteClosureUseCase,
     required ListenToApprovalStreamUseCase listenToApprovalStreamUseCase,
     required EndTripWithZoneCheckUseCase endTripWithZoneCheckUseCase,
+    ForegroundTaskService? foregroundTaskService,
   })  : _startTripUseCase = startTripUseCase,
         _endTripUseCase = endTripUseCase,
         _getActiveTripUseCase = getActiveTripUseCase,
@@ -31,6 +33,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         _requestRemoteClosureUseCase = requestRemoteClosureUseCase,
         _listenToApprovalStreamUseCase = listenToApprovalStreamUseCase,
         _endTripWithZoneCheckUseCase = endTripWithZoneCheckUseCase,
+      _foregroundTaskService = foregroundTaskService ?? ForegroundTaskService(),
         super(const TripInitial()) {
     on<TripCheckActiveRequested>(_onCheckActive);
     on<TripStartRequested>(_onStartTrip);
@@ -49,6 +52,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   final RequestRemoteClosureUseCase _requestRemoteClosureUseCase;
   final ListenToApprovalStreamUseCase _listenToApprovalStreamUseCase;
   final EndTripWithZoneCheckUseCase _endTripWithZoneCheckUseCase;
+  final ForegroundTaskService _foregroundTaskService;
 
   Timer? _timer;
   Timer? _inactivityTimer;
@@ -74,13 +78,31 @@ class TripBloc extends Bloc<TripEvent, TripState> {
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
     _inactivityTimer = Timer(_inactivityTimeout, () {
-      add(TripEndRequested(tripId: (state as TripActive).trip.id));
+      add(
+        TripEndRequested(
+          tripId: (state as TripActive).trip.id,
+          endedAt: DateTime.now(),
+        ),
+      );
     });
   }
 
   void _stopInactivityTimer() {
     _inactivityTimer?.cancel();
     _inactivityTimer = null;
+  }
+
+  void _startMonitoring() {
+    _startTimer();
+    _startLocationTracking();
+    _resetInactivityTimer();
+  }
+
+  Future<void> _stopMonitoring() async {
+    _stopTimer();
+    _stopLocationTracking();
+    _stopInactivityTimer();
+    await _foregroundTaskService.stopTask();
   }
 
   // ── Location ────────────────────────────────────────────────────────────────
@@ -129,9 +151,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
           emit(TripPendingApproval(trip: trip));
         } else {
           emit(TripActive(trip: trip, elapsed: trip.elapsed));
-          _startTimer();
-          _startLocationTracking();
-          _resetInactivityTimer();
+          _startMonitoring();
         }
       },
     );
@@ -146,6 +166,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
       StartTripParams(
         driverId: event.driverId,
         hasCameraPermission: event.hasCameraPermission,
+        startedAt: event.startedAt,
       ),
     );
 
@@ -153,9 +174,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
       (failure) => emit(TripError(message: failure.message)),
       (trip) {
         emit(TripActive(trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
-        _startTimer();
-        _startLocationTracking();
-        _resetInactivityTimer();
+        _startMonitoring();
       },
     );
   }
@@ -164,11 +183,21 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     TripEndRequested event,
     Emitter<TripState> emit,
   ) async {
-    if (state is TripActive) {
-      await _finalizeAndEmit(event.tripId, emit);
-    } else if (state is TripPendingApproval) {
-      emit(const TripIdle());
-    }
+    if (state is! TripActive) return;
+
+    await _stopMonitoring();
+
+    final result = await _endTripUseCase(
+      EndTripParams(
+        tripId: event.tripId,
+        endedAt: event.endedAt,
+      ),
+    );
+
+    result.fold(
+      (failure) => emit(TripError(message: failure.message)),
+      (trip) => emit(TripEnded(trip: trip)),
+    );
   }
 
   void _onTick(TripTick event, Emitter<TripState> emit) {
@@ -238,9 +267,7 @@ class TripBloc extends Bloc<TripEvent, TripState> {
 
   Future<void> _finalizeAndEmit(String tripId, Emitter<TripState> emit) async {
     _approvalSubscription?.cancel();
-    _stopTimer();
-    _stopLocationTracking();
-    _stopInactivityTimer();
+    await _stopMonitoring();
 
     final result = await _endTripWithZoneCheckUseCase(tripId);
 

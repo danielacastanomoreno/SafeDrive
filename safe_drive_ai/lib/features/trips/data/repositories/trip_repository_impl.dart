@@ -17,11 +17,13 @@ class TripRepositoryImpl implements TripRepository {
   Future<Either<Failure, TripEntity>> startTrip({
     required String driverId,
     required bool hasCameraPermission,
+    required DateTime startedAt,
   }) async {
     try {
       final trip = await _datasource.startTrip(
         driverId: driverId,
         hasCameraPermission: hasCameraPermission,
+        startedAt: startedAt,
       );
       return Right(trip);
     } on TripAlreadyActiveException {
@@ -34,9 +36,15 @@ class TripRepositoryImpl implements TripRepository {
   }
 
   @override
-  Future<Either<Failure, TripEntity>> endTrip(String tripId) async {
+  Future<Either<Failure, TripEntity>> endTrip({
+    required String tripId,
+    required DateTime endedAt,
+  }) async {
     try {
-      final trip = await _datasource.endTrip(tripId);
+      final trip = await _datasource.endTrip(
+        tripId: tripId,
+        endedAt: endedAt,
+      );
       return Right(trip);
     } on DocumentNotFoundException {
       return const Left(DocumentNotFoundFailure());

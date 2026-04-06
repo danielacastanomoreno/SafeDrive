@@ -5,8 +5,12 @@ abstract class TripDatasource {
   Future<TripModel> startTrip({
     required String driverId,
     required bool hasCameraPermission,
+    required DateTime startedAt,
   });
-  Future<TripModel> endTrip(String tripId);
+  Future<TripModel> endTrip({
+    required String tripId,
+    required DateTime endedAt,
+  });
   Future<TripModel?> getActiveTrip(String driverId);
 
   Future<void> saveRoutePoint({

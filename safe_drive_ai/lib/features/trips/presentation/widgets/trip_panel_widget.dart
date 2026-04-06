@@ -28,6 +28,16 @@ class TripPanelWidget extends StatelessWidget {
     return '$h:$m:$s';
   }
 
+  String _formatDateTime(DateTime dt) {
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    final year = dt.year.toString();
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final second = dt.second.toString().padLeft(2, '0');
+    return '$day/$month/$year $hour:$minute:$second';
+  }
+
   Future<void> _onStartPressed(BuildContext context) async {
     // ── 1. Permiso de ubicación (GPS) ────────────────────────────────────────
     bool hasLocation = await Permission.locationWhenInUse.isGranted;
@@ -63,11 +73,26 @@ class TripPanelWidget extends StatelessWidget {
       if (continueWithout != true) return;
     }
 
+    // ── 3. Permiso de micrófono (solicitado para monitoreo por voz) ─────────
+    bool hasMicrophone = await Permission.microphone.isGranted;
+    if (!hasMicrophone) {
+      final result = await Permission.microphone.request();
+      hasMicrophone = result.isGranted;
+    }
+
+    // Actualmente el estado de viaje solo persiste la disponibilidad de cámara.
+    // El permiso de micrófono se solicita para habilitar monitoreo de voz cuando exista.
+    if (!hasMicrophone) {
+      // No bloquea el inicio del viaje.
+    }
+
     if (!context.mounted) return;
+    final startedAt = DateTime.now();
     context.read<TripBloc>().add(
           TripStartRequested(
             driverId: driverId,
             hasCameraPermission: hasCamera,
+            startedAt: startedAt,
           ),
         );
   }
@@ -106,6 +131,7 @@ class TripPanelWidget extends StatelessWidget {
         if (state is TripActive) {
           return _ActiveTripPanel(
             formatted: _formatElapsed(state.elapsed),
+            startedAtLabel: _formatDateTime(state.trip.startTime),
             onEnd: () => _onEndPressed(context, state.trip.id),
             onOpenMap: onOpenMap,
             isClosureRequested: state.trip.closureRequestedAt != null,
@@ -267,12 +293,14 @@ class _PendingTripPanel extends StatelessWidget {
 class _ActiveTripPanel extends StatelessWidget {
   const _ActiveTripPanel({
     required this.formatted,
+    required this.startedAtLabel,
     required this.onEnd,
     required this.onOpenMap,
     this.isClosureRequested = false,
   });
 
   final String formatted;
+  final String startedAtLabel;
   final VoidCallback onEnd;
   final VoidCallback onOpenMap;
   final bool isClosureRequested;
@@ -310,6 +338,15 @@ class _ActiveTripPanel extends StatelessWidget {
                           fontWeight: FontWeight.w500),
                     ),
                   ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Inicio: $startedAtLabel',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(

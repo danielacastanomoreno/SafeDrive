@@ -32,10 +32,13 @@ class _SplashPageState extends State<SplashPage> {
         if (state is AuthRoleNotSelected) {
           context.go('/role-selection');
         } else if (state is AuthDriverAuthenticated) {
-          if (state.activeCompanyId != null) {
-            context.go('/driver/home', extra: state);
-          } else {
+          final requiresCompanySelection =
+              state.companies.length > 1 && state.activeCompanyId == null;
+
+          if (requiresCompanySelection) {
             context.go('/driver/select-company');
+          } else {
+            context.go('/driver/home', extra: state);
           }
         } else if (state is AuthCompanyAuthenticated) {
           context.go('/company/home', extra: state.company);

@@ -8,8 +8,12 @@ abstract class TripRepository {
   Future<Either<Failure, TripEntity>> startTrip({
     required String driverId,
     required bool hasCameraPermission,
+    required DateTime startedAt,
   });
-  Future<Either<Failure, TripEntity>> endTrip(String tripId);
+  Future<Either<Failure, TripEntity>> endTrip({
+    required String tripId,
+    required DateTime endedAt,
+  });
   Future<Either<Failure, TripEntity?>> getActiveTrip(String driverId);
 
   Future<Either<Failure, void>> saveRoutePoint({

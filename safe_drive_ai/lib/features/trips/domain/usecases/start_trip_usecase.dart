@@ -16,6 +16,7 @@ class StartTripUseCase implements UseCase<TripEntity, StartTripParams> {
       _repository.startTrip(
         driverId: params.driverId,
         hasCameraPermission: params.hasCameraPermission,
+        startedAt: params.startedAt,
       );
 }
 
@@ -23,11 +24,13 @@ class StartTripParams extends Equatable {
   const StartTripParams({
     required this.driverId,
     required this.hasCameraPermission,
+    required this.startedAt,
   });
 
   final String driverId;
   final bool hasCameraPermission;
+  final DateTime startedAt;
 
   @override
-  List<Object?> get props => [driverId, hasCameraPermission];
+  List<Object?> get props => [driverId, hasCameraPermission, startedAt];
 }

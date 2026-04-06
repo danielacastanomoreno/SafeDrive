@@ -37,10 +37,13 @@ class _CompanyLoginPageState extends State<CompanyLoginPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final normalizedEmail = _emailController.text.trim().toLowerCase();
+    final normalizedPassword = _passwordController.text.trim();
+
     context.read<AuthBloc>().add(
           AuthCompanyLoginRequested(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
+            email: normalizedEmail,
+            password: normalizedPassword,
           ),
         );
   }

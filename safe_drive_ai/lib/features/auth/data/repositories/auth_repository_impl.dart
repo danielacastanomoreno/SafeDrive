@@ -127,6 +127,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> logout() async {
     try {
       await _datasource.logout();
+      await _datasource.clearSession();
       return const Right(null);
     } on FirebaseAuthException catch (e) {
       return Left(_mapFirebaseAuthException(e));

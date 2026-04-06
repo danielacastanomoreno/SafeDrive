@@ -13,14 +13,21 @@ class EndTripUseCase implements UseCase<TripEntity, EndTripParams> {
 
   @override
   Future<Either<Failure, TripEntity>> call(EndTripParams params) =>
-      _repository.endTrip(params.tripId);
+      _repository.endTrip(
+        tripId: params.tripId,
+        endedAt: params.endedAt,
+      );
 }
 
 class EndTripParams extends Equatable {
-  const EndTripParams({required this.tripId});
+  const EndTripParams({
+    required this.tripId,
+    required this.endedAt,
+  });
 
   final String tripId;
+  final DateTime endedAt;
 
   @override
-  List<Object?> get props => [tripId];
+  List<Object?> get props => [tripId, endedAt];
 }

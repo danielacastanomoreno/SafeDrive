@@ -67,7 +67,7 @@ class _DriverRegisterPageState extends State<DriverRegisterPage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthDriverAuthenticated) {
-            context.go('/driver/home', extra: state.user);
+            context.go('/driver/home', extra: state);
           }
         },
         builder: (context, state) {
