@@ -59,6 +59,8 @@ abstract class AuthRemoteDatasource {
   /// Guarda userId, role y opcionalmente activeCompanyId en SharedPreferences.
   Future<void> saveSession(String userId, String role, String? activeCompanyId);
 
-  /// Elimina userId, role y activeCompanyId de SharedPreferences.
+  /// Elimina userId y activeCompanyId de SharedPreferences.
+  ///
+  /// El rol se conserva para no volver a pedir el tipo de cuenta en cada inicio.
   Future<void> clearSession();
 }

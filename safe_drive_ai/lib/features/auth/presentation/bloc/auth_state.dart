@@ -28,6 +28,17 @@ class AuthRoleNotSelected extends AuthState {
   const AuthRoleNotSelected();
 }
 
+/// Existe un rol preferido guardado, pero no hay sesión activa en Firebase.
+/// La UI debe redirigir al login correspondiente sin volver a pedir el rol.
+class AuthRoleRemembered extends AuthState {
+  const AuthRoleRemembered({required this.role});
+
+  final String role;
+
+  @override
+  List<Object?> get props => [role];
+}
+
 /// Un conductor está autenticado y tiene al menos una empresa resuelta.
 ///
 /// [activeCompanyId] es `null` cuando el conductor no pertenece a ninguna

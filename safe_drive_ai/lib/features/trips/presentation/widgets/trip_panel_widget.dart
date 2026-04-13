@@ -71,6 +71,18 @@ class TripPanelWidget extends StatelessWidget {
         builder: (_) => const _NoCameraDialog(),
       );
       if (continueWithout != true) return;
+
+      // La hora de inicio debe ser exacta al momento de confirmar continuar.
+      if (!context.mounted) return;
+      final startedAt = DateTime.now();
+      context.read<TripBloc>().add(
+            TripStartRequested(
+              driverId: driverId,
+              hasCameraPermission: false,
+              startedAt: startedAt,
+            ),
+          );
+      return;
     }
 
     // ── 3. Permiso de micrófono (solicitado para monitoreo por voz) ─────────
@@ -280,8 +292,8 @@ class _PendingTripPanel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
-              textStyle: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600),
+              textStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -309,7 +321,9 @@ class _ActiveTripPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: isClosureRequested ? const Color(0xFFE65100) : const Color(0xFF1B5E20), // Naranja oscuro si está esperando
+      color: isClosureRequested
+          ? const Color(0xFFE65100)
+          : const Color(0xFF1B5E20), // Naranja oscuro si está esperando
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -325,13 +339,17 @@ class _ActiveTripPanel extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: isClosureRequested ? AppColors.warning : AppColors.success,
+                        color: isClosureRequested
+                            ? AppColors.warning
+                            : AppColors.success,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isClosureRequested ? 'Esperando aprobación...' : 'Viaje en curso',
+                      isClosureRequested
+                          ? 'Esperando aprobación...'
+                          : 'Viaje en curso',
                       style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -377,7 +395,7 @@ class _ActiveTripPanel extends StatelessWidget {
           ElevatedButton.icon(
             onPressed: onEnd,
             icon: const Icon(Icons.stop, size: 18),
-            label: const Text('Finalizar'),
+            label: const Text('Finalizar Viaje'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,

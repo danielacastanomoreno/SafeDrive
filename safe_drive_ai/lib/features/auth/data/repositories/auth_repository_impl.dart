@@ -22,6 +22,21 @@ class AuthRepositoryImpl implements AuthRepository {
       case 'wrong-password':
       case 'invalid-credential':
         return const InvalidCredentialsFailure();
+      case 'invalid-email':
+        return const ValidationFailure(message: 'Correo electrónico inválido.');
+      case 'too-many-requests':
+        return const AuthFailure(
+          message: 'Demasiados intentos. Intenta de nuevo en unos minutos.',
+        );
+      case 'operation-not-allowed':
+        return const AuthFailure(
+          message:
+              'La recuperación de contraseña no está habilitada en Firebase Auth.',
+        );
+      case 'user-disabled':
+        return const AuthFailure(
+          message: 'Esta cuenta fue deshabilitada. Contacta al administrador.',
+        );
       case 'email-already-in-use':
         return const EmailAlreadyInUseFailure();
       case 'weak-password':
@@ -142,6 +157,9 @@ class AuthRepositoryImpl implements AuthRepository {
       await _datasource.sendPasswordReset(email);
       return const Right(null);
     } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        return const Left(UserNotFoundFailure());
+      }
       return Left(_mapFirebaseAuthException(e));
     } on Exception catch (e) {
       return Left(ServerFailure(message: e.toString()));

@@ -95,7 +95,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
               if (state is AuthLoggedOut) {
-                context.go('/role-selection');
+                context.go('/');
               }
             },
           ),

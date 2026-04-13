@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../widgets/role_button_widget.dart';
+
+const _userRolePrefsKey = 'user_role';
 
 /// Pantalla de selección de rol.
 ///
@@ -10,6 +13,18 @@ import '../widgets/role_button_widget.dart';
 /// previa. No tiene lógica de negocio: delega la navegación al router.
 class RoleSelectionPage extends StatelessWidget {
   const RoleSelectionPage({super.key});
+
+  Future<void> _selectRole(BuildContext context, String role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userRolePrefsKey, role);
+
+    if (!context.mounted) return;
+    if (role == 'driver') {
+      context.push('/driver/login');
+    } else {
+      context.push('/company/login');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,14 +67,14 @@ class RoleSelectionPage extends StatelessWidget {
                 label: 'Soy conductor',
                 icon: Icons.drive_eta,
                 color: AppColors.primary,
-                onTap: () => context.push('/driver/login'),
+                onTap: () => _selectRole(context, 'driver'),
               ),
               const SizedBox(height: 16),
               RoleButtonWidget(
                 label: 'Soy empresa',
                 icon: Icons.business,
                 color: AppColors.accent,
-                onTap: () => context.push('/company/login'),
+                onTap: () => _selectRole(context, 'company'),
               ),
             ],
           ),

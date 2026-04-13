@@ -169,7 +169,7 @@ class _CompanyHomePageState extends State<CompanyHomePage> {
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthLoggedOut) {
-            context.go('/role-selection');
+            context.go('/');
           }
         },
         child: Builder(

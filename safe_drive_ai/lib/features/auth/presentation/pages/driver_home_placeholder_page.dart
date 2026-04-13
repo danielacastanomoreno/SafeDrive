@@ -20,7 +20,7 @@ class DriverHomePlaceholderPage extends StatelessWidget {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthLoggedOut) {
-          context.go('/role-selection');
+          context.go('/');
         }
       },
       child: Scaffold(

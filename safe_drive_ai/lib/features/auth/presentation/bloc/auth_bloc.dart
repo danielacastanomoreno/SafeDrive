@@ -96,9 +96,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (_) async => emit(const AuthRoleNotSelected()),
       (role) async {
         if (role == 'driver') {
-          await _rehidrateDriver(emit);
+          final restored = await _rehidrateDriver(emit);
+          if (!restored) {
+            emit(const AuthRoleRemembered(role: 'driver'));
+          }
         } else if (role == 'company') {
-          await _rehidrateCompany(emit);
+          final restored = await _rehidrateCompany(emit);
+          if (!restored) {
+            emit(const AuthRoleRemembered(role: 'company'));
+          }
         } else {
           emit(const AuthRoleNotSelected());
         }
@@ -110,18 +116,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ///
   /// Si el uid de Firebase Auth es válido y el documento existe, emite
   /// [AuthDriverAuthenticated]. En cualquier otro caso emite [AuthRoleNotSelected].
-  Future<void> _rehidrateDriver(Emitter<AuthState> emit) async {
+  Future<bool> _rehidrateDriver(Emitter<AuthState> emit) async {
     final driverResult = await _getCurrentDriverUseCase(const NoParams());
 
-    await driverResult.fold(
-      (_) async => emit(const AuthRoleNotSelected()),
+    return driverResult.fold(
+      (_) async => false,
       (user) async {
         final companiesResult = await _getDriverCompaniesUseCase(
           GetDriverCompaniesParams(driverId: user.id),
         );
 
-        await companiesResult.fold(
-          (_) async => emit(const AuthRoleNotSelected()),
+        return companiesResult.fold(
+          (_) async => false,
           (companies) async {
             final activeIdResult =
                 await _getActiveCompanyUseCase(const NoParams());
@@ -137,6 +143,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     (companies.length == 1 ? companies.first.companyId : null),
               ),
             );
+            return true;
           },
         );
       },
@@ -147,12 +154,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ///
   /// Si el uid de Firebase Auth es válido y el documento existe, emite
   /// [AuthCompanyAuthenticated]. En cualquier otro caso emite [AuthRoleNotSelected].
-  Future<void> _rehidrateCompany(Emitter<AuthState> emit) async {
+  Future<bool> _rehidrateCompany(Emitter<AuthState> emit) async {
     final companyResult = await _getCurrentCompanyUseCase(const NoParams());
 
-    companyResult.fold(
-      (_) => emit(const AuthRoleNotSelected()),
-      (company) => emit(AuthCompanyAuthenticated(company: company)),
+    return companyResult.fold(
+      (_) => false,
+      (company) {
+        emit(AuthCompanyAuthenticated(company: company));
+        return true;
+      },
     );
   }
 

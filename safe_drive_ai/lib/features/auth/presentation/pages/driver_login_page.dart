@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
@@ -11,6 +12,8 @@ import '../widgets/auth_error_widget.dart';
 import '../widgets/auth_text_field_widget.dart';
 import '../widgets/password_field_widget.dart';
 import '../widgets/primary_button_widget.dart';
+
+const _userRolePrefsKey = 'user_role';
 
 /// Pantalla de inicio de sesión para conductores.
 ///
@@ -46,6 +49,14 @@ class _DriverLoginPageState extends State<DriverLoginPage> {
             password: normalizedPassword,
           ),
         );
+  }
+
+  Future<void> _changeAccountType() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userRolePrefsKey);
+
+    if (!mounted) return;
+    context.go('/role-selection');
   }
 
   @override
@@ -146,6 +157,15 @@ class _DriverLoginPageState extends State<DriverLoginPage> {
                         child: const Text(
                           '¿No tienes cuenta? Regístrate',
                           style: TextStyle(color: AppColors.primary),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: TextButton(
+                        onPressed: isLoading ? null : _changeAccountType,
+                        child: const Text(
+                          'Cambiar tipo de cuenta',
+                          style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ),
                     ),

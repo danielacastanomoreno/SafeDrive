@@ -85,6 +85,8 @@ abstract class AuthRepository {
     String? activeCompanyId,
   );
 
-  /// Elimina todos los datos de sesión de SharedPreferences.
+  /// Elimina userId y activeCompanyId de SharedPreferences.
+  ///
+  /// El rol preferido se mantiene para redirigir al login correcto.
   Future<Either<Failure, void>> clearSession();
 }

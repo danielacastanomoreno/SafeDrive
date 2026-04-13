@@ -31,6 +31,14 @@ class _SplashPageState extends State<SplashPage> {
       listener: (context, state) {
         if (state is AuthRoleNotSelected) {
           context.go('/role-selection');
+        } else if (state is AuthRoleRemembered) {
+          if (state.role == 'driver') {
+            context.go('/driver/login');
+          } else if (state.role == 'company') {
+            context.go('/company/login');
+          } else {
+            context.go('/role-selection');
+          }
         } else if (state is AuthDriverAuthenticated) {
           final requiresCompanySelection =
               state.companies.length > 1 && state.activeCompanyId == null;

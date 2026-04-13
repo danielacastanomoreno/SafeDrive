@@ -36,9 +36,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    final normalizedEmail = _emailController.text.trim().toLowerCase();
     context.read<AuthBloc>().add(
           AuthPasswordResetRequested(
-            email: _emailController.text.trim(),
+            email: normalizedEmail,
           ),
         );
   }
@@ -105,9 +106,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.12),
+                color: AppColors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.4),
+                ),
               ),
               child: const Row(
                 children: [

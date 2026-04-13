@@ -33,7 +33,8 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         _requestRemoteClosureUseCase = requestRemoteClosureUseCase,
         _listenToApprovalStreamUseCase = listenToApprovalStreamUseCase,
         _endTripWithZoneCheckUseCase = endTripWithZoneCheckUseCase,
-      _foregroundTaskService = foregroundTaskService ?? ForegroundTaskService(),
+        _foregroundTaskService =
+            foregroundTaskService ?? ForegroundTaskService(),
         super(const TripInitial()) {
     on<TripCheckActiveRequested>(_onCheckActive);
     on<TripStartRequested>(_onStartTrip);
@@ -173,7 +174,8 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     result.fold(
       (failure) => emit(TripError(message: failure.message)),
       (trip) {
-        emit(TripActive(trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
+        emit(TripActive(
+            trip: trip, elapsed: Duration.zero, isNewlyStarted: true));
         _startMonitoring();
       },
     );
@@ -210,15 +212,25 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     }
   }
 
-  void _onLocationUpdated(
+  Future<void> _onLocationUpdated(
     TripLocationUpdated event,
     Emitter<TripState> emit,
-  ) {
+  ) async {
     if (state is TripActive) {
       final current = state as TripActive;
-      final newRoute = [...?current.route, LatLng(event.lat, event.lng)];
+      final newRoute = [...current.route, LatLng(event.lat, event.lng)];
       emit(current.copyWith(route: newRoute));
       _resetInactivityTimer();
+
+      final saveResult = await _saveRoutePointUseCase(
+        SaveRoutePointParams(
+          tripId: current.trip.id,
+          lat: event.lat,
+          lng: event.lng,
+        ),
+      );
+
+      saveResult.fold((_) {}, (_) {});
     }
   }
 
@@ -240,13 +252,15 @@ class TripBloc extends Bloc<TripEvent, TripState> {
         emit(currentState.copyWith(trip: updatedTrip));
 
         _approvalSubscription?.cancel();
-        _approvalSubscription = _listenToApprovalStreamUseCase(event.tripId).listen(
+        _approvalSubscription =
+            _listenToApprovalStreamUseCase(event.tripId).listen(
           (result) {
             result.fold(
               (failure) {},
               (trip) {
                 if (trip.isClosureApproved) {
-                  add(ApprovalStreamUpdatedEvent(isApproved: true, tripId: event.tripId));
+                  add(ApprovalStreamUpdatedEvent(
+                      isApproved: true, tripId: event.tripId));
                 }
               },
             );
@@ -273,8 +287,11 @@ class TripBloc extends Bloc<TripEvent, TripState> {
 
     result.fold(
       (failure) {
-        if (failure.message.contains('Permiso') || failure.message.contains('ubicación')) {
-          emit(TripClosureError(message: 'Se requiere permiso de ubicación para finalizar el viaje.'));
+        if (failure.message.contains('Permiso') ||
+            failure.message.contains('ubicación')) {
+          emit(const TripClosureError(
+              message:
+                  'Se requiere permiso de ubicación para finalizar el viaje.'));
         } else {
           emit(TripClosureError(message: failure.message));
         }

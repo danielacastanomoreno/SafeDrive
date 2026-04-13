@@ -167,7 +167,38 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
 
   @override
   Future<void> sendPasswordReset(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
+    final rawEmail = email.trim();
+    final normalizedEmail = rawEmail.toLowerCase();
+
+    Future<bool> existsInCollection(String collection) async {
+      final byNormalized = await _firestore
+          .collection(collection)
+          .where('email', isEqualTo: normalizedEmail)
+          .limit(1)
+          .get();
+
+      if (byNormalized.docs.isNotEmpty) return true;
+
+      if (rawEmail != normalizedEmail) {
+        final byRaw = await _firestore
+            .collection(collection)
+            .where('email', isEqualTo: rawEmail)
+            .limit(1)
+            .get();
+        return byRaw.docs.isNotEmpty;
+      }
+
+      return false;
+    }
+
+    final existsInUsers = await existsInCollection('users');
+    final existsInCompanies = await existsInCollection('companies');
+
+    if (!existsInUsers && !existsInCompanies) {
+      throw FirebaseAuthException(code: 'user-not-found');
+    }
+
+    await _auth.sendPasswordResetEmail(email: normalizedEmail);
   }
 
   // ── Sesión actual ────────────────────────────────────────────────────────────
@@ -260,7 +291,6 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
   @override
   Future<void> clearSession() async {
     await _prefs.remove(_keyUserId);
-    await _prefs.remove(_keyUserRole);
     await _prefs.remove(_keyActiveCompanyId);
   }
 }

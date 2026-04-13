@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../injection_container.dart';
 import '../../domain/entities/trip_entity.dart';
+import '../../domain/usecases/get_driver_trips_usecase.dart';
 import '../../domain/usecases/get_trip_route_usecase.dart';
 
 /// Pantalla de resumen del viaje mostrada automáticamente al finalizar.
@@ -26,6 +27,9 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
   bool _loadingRoute = true;
   TripEntity? _trip;
   bool _loadingTrip = true;
+  List<TripEntity> _recentTrips = [];
+  bool _loadingHistory = true;
+  String? _historyError;
 
   @override
   void initState() {
@@ -38,12 +42,14 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
       _trip = widget.trip;
       _loadingTrip = false;
       _loadRoute();
+      _loadRecentTrips();
     } else {
       // Trip was closed via PIN/remote - try to get the last trip from driver
       // For now, show a simplified summary
       setState(() {
         _loadingTrip = false;
         _loadingRoute = false;
+        _loadingHistory = false;
       });
     }
   }
@@ -63,6 +69,32 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
         setState(() {
           _route = points.map((p) => LatLng(p.lat, p.lng)).toList();
           _loadingRoute = false;
+        });
+      },
+    );
+  }
+
+  Future<void> _loadRecentTrips() async {
+    if (_trip == null) {
+      setState(() => _loadingHistory = false);
+      return;
+    }
+
+    final result = await sl<GetDriverTripsUseCase>()(
+      GetDriverTripsParams(driverId: _trip!.driverId),
+    );
+
+    result.fold(
+      (failure) {
+        setState(() {
+          _historyError = failure.message;
+          _loadingHistory = false;
+        });
+      },
+      (trips) {
+        setState(() {
+          _recentTrips = trips.where((t) => t.endTime != null).take(5).toList();
+          _loadingHistory = false;
         });
       },
     );
@@ -90,7 +122,7 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
   @override
   Widget build(BuildContext context) {
     // Handle loading and null cases
-    if (_loadingTrip || _trip == null) {
+    if (_loadingTrip) {
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -117,6 +149,67 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
                 ),
                 SizedBox(height: 8),
                 CircularProgressIndicator(color: AppColors.primary),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_trip == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Resumen del viaje'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          automaticallyImplyLeading: false,
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.check_circle,
+                    color: AppColors.success, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'Viaje finalizado y guardado',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'No fue posible cargar el detalle de ruta en este momento.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => context.pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textOnPrimary,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Volver al inicio',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ],
             ),
           ),
@@ -206,6 +299,19 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
                 ),
               ),
 
+              const SizedBox(height: 24),
+
+              const Text(
+                'Historial reciente',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildRecentTripsSection(),
+
               const SizedBox(height: 32),
 
               // ── Button ────────────────────────────────────────────────────
@@ -229,6 +335,105 @@ class _TripSummaryPageState extends State<TripSummaryPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRecentTripsSection() {
+    if (_loadingHistory) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_historyError != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+        ),
+        child: Text(
+          'No se pudo cargar el historial: $_historyError',
+          style: const TextStyle(color: AppColors.error, fontSize: 13),
+        ),
+      );
+    }
+
+    if (_recentTrips.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Text(
+          'Aún no hay viajes finalizados en el historial.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+
+    return Column(
+      children: _recentTrips.map((trip) {
+        final end = trip.endTime;
+        final duration = end?.difference(trip.startTime);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.history, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Inicio: ${_formatDateTime(trip.startTime)}',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      end != null
+                          ? 'Fin: ${_formatDateTime(end)}'
+                          : 'Fin: pendiente',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (duration != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Duración: ${_formatDuration(duration)}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 

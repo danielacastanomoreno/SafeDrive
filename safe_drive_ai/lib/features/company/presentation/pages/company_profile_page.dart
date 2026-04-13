@@ -73,7 +73,7 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthLoggedOut) {
-          context.go('/role-selection');
+          context.go('/');
         }
       },
       child: BlocConsumer<CompanyBloc, CompanyState>(
