@@ -18,6 +18,7 @@ import '../../../trips/domain/usecases/end_trip_with_zone_check_usecase.dart';
 import '../../../trips/presentation/bloc/trip_bloc.dart';
 import '../../../trips/presentation/bloc/trip_event.dart';
 import '../../../trips/presentation/bloc/trip_state.dart';
+import '../../../trips/presentation/cubit/seatbelt_cubit.dart';
 import '../../../trips/presentation/pages/trip_map_page.dart';
 import '../../../trips/presentation/widgets/trip_panel_widget.dart';
 import '../../domain/usecases/accept_invitation_usecase.dart';
@@ -89,6 +90,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
           ),
         ),
         BlocProvider<TripBloc>.value(value: _tripBloc),
+        BlocProvider<SeatbeltCubit>(
+          create: (_) => sl<SeatbeltCubit>(),
+        ),
       ],
       child: MultiBlocListener(
         listeners: [
