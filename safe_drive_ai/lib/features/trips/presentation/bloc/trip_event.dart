@@ -48,12 +48,17 @@ class TripTick extends TripEvent {
 
 /// Internal — dispatched when GPS emits a new position.
 class TripLocationUpdated extends TripEvent {
-  const TripLocationUpdated({required this.lat, required this.lng});
+  const TripLocationUpdated({
+    required this.lat,
+    required this.lng,
+    this.heading,
+  });
   final double lat;
   final double lng;
+  final double? heading;
 
   @override
-  List<Object?> get props => [lat, lng];
+  List<Object?> get props => [lat, lng, heading];
 }
 
 // --- Cierre de viaje ---

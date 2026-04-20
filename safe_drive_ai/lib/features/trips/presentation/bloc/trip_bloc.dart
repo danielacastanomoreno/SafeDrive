@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -115,13 +116,29 @@ class TripBloc extends Bloc<TripEvent, TripState> {
           permission == LocationPermission.deniedForever) {
         return;
       }
+
+      final currentPosition = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      add(TripLocationUpdated(
+        lat: currentPosition.latitude,
+        lng: currentPosition.longitude,
+        heading: currentPosition.heading,
+      ));
+
       _positionSub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
+          distanceFilter: 3,
         ),
       ).listen((pos) {
-        add(TripLocationUpdated(lat: pos.latitude, lng: pos.longitude));
+        add(TripLocationUpdated(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          heading: pos.heading,
+        ));
       });
     } catch (_) {}
   }
@@ -219,7 +236,13 @@ class TripBloc extends Bloc<TripEvent, TripState> {
     if (state is TripActive) {
       final current = state as TripActive;
       final newRoute = [...current.route, LatLng(event.lat, event.lng)];
-      emit(current.copyWith(route: newRoute));
+      final heading = _resolveHeading(
+        eventHeading: event.heading,
+        previousRoute: current.route,
+        newPosition: LatLng(event.lat, event.lng),
+        previousHeading: current.heading,
+      );
+      emit(current.copyWith(route: newRoute, heading: heading));
       _resetInactivityTimer();
 
       final saveResult = await _saveRoutePointUseCase(
@@ -232,6 +255,47 @@ class TripBloc extends Bloc<TripEvent, TripState> {
 
       saveResult.fold((_) {}, (_) {});
     }
+  }
+
+  double _resolveHeading({
+    required double? eventHeading,
+    required List<LatLng> previousRoute,
+    required LatLng newPosition,
+    required double previousHeading,
+  }) {
+    if (eventHeading != null && eventHeading.isFinite && eventHeading >= 0) {
+      return eventHeading % 360;
+    }
+
+    if (previousRoute.isEmpty) {
+      return previousHeading;
+    }
+
+    final prev = previousRoute.last;
+    final bearing = _bearingDegrees(
+      prev.latitude,
+      prev.longitude,
+      newPosition.latitude,
+      newPosition.longitude,
+    );
+    return bearing;
+  }
+
+  double _bearingDegrees(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    final phi1 = lat1 * math.pi / 180;
+    final phi2 = lat2 * math.pi / 180;
+    final deltaLambda = (lon2 - lon1) * math.pi / 180;
+
+    final y = math.sin(deltaLambda) * math.cos(phi2);
+    final x = math.cos(phi1) * math.sin(phi2) -
+        math.sin(phi1) * math.cos(phi2) * math.cos(deltaLambda);
+    final theta = math.atan2(y, x);
+    return (theta * 180 / math.pi + 360) % 360;
   }
 
   Future<void> _onRequestRemoteClosure(

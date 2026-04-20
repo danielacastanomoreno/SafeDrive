@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
@@ -232,6 +233,7 @@ class _TripMapPageState extends State<TripMapPage>
 
         final route = state.route;
         final currentPosition = route.isNotEmpty ? route.last : null;
+        final headingRadians = state.heading * math.pi / 180;
         final topPadding = MediaQuery.of(context).padding.top;
         final overlayTop = topPadding + 80.0;
 
@@ -315,8 +317,16 @@ class _TripMapPageState extends State<TripMapPage>
                                       offset: Offset(0, 2)),
                                 ],
                               ),
-                              child: const Icon(Icons.navigation,
-                                  color: Colors.white, size: 22),
+                              child: Center(
+                                child: Transform.rotate(
+                                  angle: headingRadians,
+                                  child: const Icon(
+                                    Icons.navigation,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],

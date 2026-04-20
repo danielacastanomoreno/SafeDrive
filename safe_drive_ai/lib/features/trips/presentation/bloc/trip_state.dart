@@ -36,6 +36,7 @@ class TripActive extends TripState {
     required this.trip,
     required this.elapsed,
     this.route = const [],
+    this.heading = 0,
     this.isNewlyStarted = false,
   });
 
@@ -45,6 +46,9 @@ class TripActive extends TripState {
   /// GPS points accumulated since the trip started (or since app resumed).
   final List<LatLng> route;
 
+  /// Current vehicle heading in degrees.
+  final double heading;
+
   /// `true` only on the very first emission after [TripStartRequested] succeeds.
   /// Used by [DriverHomePage] to auto-open the map exactly once.
   final bool isNewlyStarted;
@@ -53,17 +57,19 @@ class TripActive extends TripState {
     TripEntity? trip,
     Duration? elapsed,
     List<LatLng>? route,
+    double? heading,
   }) {
     return TripActive(
       trip: trip ?? this.trip,
       elapsed: elapsed ?? this.elapsed,
       route: route ?? this.route,
+      heading: heading ?? this.heading,
       isNewlyStarted: false, // never true after the initial emission
     );
   }
 
   @override
-  List<Object?> get props => [trip, elapsed, route, isNewlyStarted];
+  List<Object?> get props => [trip, elapsed, route, heading, isNewlyStarted];
 }
 
 class TripEnded extends TripState {

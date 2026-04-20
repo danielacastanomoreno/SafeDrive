@@ -47,8 +47,6 @@ class TripDatasourceImpl implements TripDatasource {
         'hasCameraPermission': hasCameraPermission,
         'status': 'active',
       });
-
-      final data = pending.docs.first.data();
       return TripModel(
         id: docRef.id,
         driverId: driverId,
@@ -329,14 +327,37 @@ class TripDatasourceImpl implements TripDatasource {
 
   @override
   Future<List<TripModel>> getDriverTrips(String driverId) async {
-    final snapshot = await _firestore
-        .collection('trips')
-        .where('driverId', isEqualTo: driverId)
-        .orderBy('startTime', descending: true)
-        .get();
-    return snapshot.docs
-        .map((doc) => TripModel.fromMap(doc.id, doc.data()))
-        .toList();
+    try {
+      final snapshot = await _firestore
+          .collection('trips')
+          .where('driverId', isEqualTo: driverId)
+          .orderBy('startTime', descending: true)
+          .get();
+      return snapshot.docs
+          .map((doc) => TripModel.fromMap(doc.id, doc.data()))
+          .toList();
+    } on FirebaseException catch (e) {
+      final requiresIndex =
+          e.code == 'failed-precondition' &&
+              (e.message?.toLowerCase().contains('requires an index') ?? false);
+
+      if (!requiresIndex) {
+        rethrow;
+      }
+
+      // Fallback for environments where composite indexes are not yet deployed.
+      final fallbackSnapshot = await _firestore
+          .collection('trips')
+          .where('driverId', isEqualTo: driverId)
+          .get();
+
+      final trips = fallbackSnapshot.docs
+          .map((doc) => TripModel.fromMap(doc.id, doc.data()))
+          .toList()
+        ..sort((a, b) => b.startTime.compareTo(a.startTime));
+
+      return trips;
+    }
   }
 
   // --- Cierre de viaje ---
