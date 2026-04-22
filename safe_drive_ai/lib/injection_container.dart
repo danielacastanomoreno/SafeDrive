@@ -60,7 +60,9 @@ import 'features/trips/domain/usecases/request_remote_closure_usecase.dart';
 import 'features/trips/domain/usecases/listen_to_approval_stream_usecase.dart';
 import 'features/trips/domain/usecases/end_trip_with_zone_check_usecase.dart';
 import 'features/trips/domain/usecases/get_driver_trips_usecase.dart';
+import 'features/trips/presentation/cubit/drowsiness_cubit.dart';
 import 'features/trips/presentation/cubit/seatbelt_cubit.dart';
+import 'features/trips/presentation/services/drowsiness_detection_service.dart';
 import 'features/trips/presentation/services/seatbelt_detection_service.dart';
 
 /// Contenedor global de inyección de dependencias de Safe Drive AI.
@@ -221,6 +223,8 @@ void _initTrips() {
   sl.registerLazySingleton(() => ListenToApprovalStreamUseCase(sl()));
   sl.registerLazySingleton(() => EndTripWithZoneCheckUseCase(sl()));
 
+  sl.registerFactory(() => DrowsinessDetectionService());
+  sl.registerFactory(() => DrowsinessCubit(service: sl()));
   sl.registerFactory(() => SeatbeltDetectionService());
   sl.registerFactory(() => SeatbeltCubit(service: sl()));
 }
