@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,12 +40,14 @@ class _TripMapPageState extends State<TripMapPage>
 
   // ── Front camera (selfie — conductor) ────────────────────────────────────
   CameraController? _frontController;
+  CameraDescription? _frontCamera;
   bool _frontReady = false;
   bool _frontVisible = true;
   InputImageRotation _imageRotation = InputImageRotation.rotation0deg;
   int _frameCounter = 0;
 
-  static const int _frameSkip = 10;
+  static const int _seatbeltFrameSkip = 10;
+  static const int _drowsinessFrameSkip = 15;
   static const Duration _drowsinessAlertCooldown = Duration(seconds: 3);
 
   Timer? _audioAlarmTimer;
@@ -66,6 +69,7 @@ class _TripMapPageState extends State<TripMapPage>
       parent: _blinkController,
       curve: Curves.easeInOut,
     );
+    _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
     _initCamera();
   }
 
@@ -95,13 +99,17 @@ class _TripMapPageState extends State<TripMapPage>
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    _imageRotation = _rotationFromSensorDegrees(frontCam.sensorOrientation);
+
+    final imageFormatGroup =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888;
 
     final ctrl = CameraController(
       frontCam,
       ResolutionPreset.low,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: imageFormatGroup,
     );
     try {
       await ctrl.initialize();
@@ -109,9 +117,14 @@ class _TripMapPageState extends State<TripMapPage>
         await ctrl.dispose();
         return;
       }
+      _imageRotation = _rotationFromCamera(
+        frontCam,
+        ctrl.value.deviceOrientation,
+      );
       await ctrl.startImageStream(_onCameraImage);
       setState(() {
         _frontController = ctrl;
+        _frontCamera = frontCam;
         _frontReady = true;
       });
     } catch (_) {
@@ -136,11 +149,25 @@ class _TripMapPageState extends State<TripMapPage>
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   void _onCameraImage(CameraImage image) {
-    _frameCounter++;
-    if (_frameCounter % _frameSkip != 0 || !mounted) return;
+    final frontController = _frontController;
+    final frontCamera = _frontCamera;
+    if (frontController != null && frontCamera != null) {
+      _imageRotation = _rotationFromCamera(
+        frontCamera,
+        frontController.value.deviceOrientation,
+      );
+    }
 
-    context.read<SeatbeltCubit>().processFrame(image, _imageRotation);
-    context.read<DrowsinessCubit>().processFrame(image, _imageRotation);
+    _frameCounter++;
+    if (!mounted) return;
+
+    if (_frameCounter % _seatbeltFrameSkip == 0) {
+      context.read<SeatbeltCubit>().processFrame(image, _imageRotation);
+    }
+
+    if (_frameCounter % _drowsinessFrameSkip == 0) {
+      context.read<DrowsinessCubit>().processFrame(image, _imageRotation);
+    }
   }
 
   void _stopCameraStream() {
@@ -188,6 +215,9 @@ class _TripMapPageState extends State<TripMapPage>
     }
 
     _lastDrowsinessAlertAt = now;
+    debugPrint(
+      '[DROWSINESS] signal eyesClosed=${state.eyesClosed} yawning=${state.yawning} score=${state.score}',
+    );
     _triggerAlarmOnce();
   }
 
@@ -202,23 +232,39 @@ class _TripMapPageState extends State<TripMapPage>
     SystemSound.play(SystemSoundType.alert);
 
     try {
-      await _audioPlayer.play(AssetSource('audio/seatbelt_alert.mp3'));
-    } catch (_) {
-      // The app still warns with vibration and the platform alert sound.
+      await _audioPlayer.stop();
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.play(
+        AssetSource('audio/alert_beep.wav'),
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('[ALERT_AUDIO] failed to play alert_beep.wav: $e');
     }
   }
 
-  InputImageRotation _rotationFromSensorDegrees(int degrees) {
-    switch (degrees) {
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      default:
-        return InputImageRotation.rotation0deg;
-    }
+  InputImageRotation _rotationFromCamera(
+    CameraDescription camera,
+    DeviceOrientation deviceOrientation,
+  ) {
+    final deviceDegrees = switch (deviceOrientation) {
+      DeviceOrientation.portraitUp => 0,
+      DeviceOrientation.landscapeLeft => 90,
+      DeviceOrientation.portraitDown => 180,
+      DeviceOrientation.landscapeRight => 270,
+    };
+
+    final sensorDegrees = camera.sensorOrientation;
+    final rotationDegrees = camera.lensDirection == CameraLensDirection.front
+        ? (sensorDegrees + deviceDegrees) % 360
+        : (sensorDegrees - deviceDegrees + 360) % 360;
+
+    return switch (rotationDegrees) {
+      90 => InputImageRotation.rotation90deg,
+      180 => InputImageRotation.rotation180deg,
+      270 => InputImageRotation.rotation270deg,
+      _ => InputImageRotation.rotation0deg,
+    };
   }
 
   String _formatElapsed(Duration d) {
@@ -282,6 +328,9 @@ class _TripMapPageState extends State<TripMapPage>
             ),
             BlocListener<DrowsinessCubit, DrowsinessState>(
               listener: (context, drowsinessState) {
+                debugPrint(
+                  '[DROWSINESS] face=${drowsinessState.faceDetected} eyes=${drowsinessState.eyesClosed} yawn=${drowsinessState.yawning} score=${drowsinessState.score} drowsy=${drowsinessState.isDrowsy}',
+                );
                 _triggerDrowsinessAlertIfNeeded(drowsinessState);
               },
             ),
@@ -509,6 +558,16 @@ class _TripMapPageState extends State<TripMapPage>
                             tooltip: 'Mostrar cámara',
                           ),
                   ),
+
+                Positioned(
+                  top: overlayTop,
+                  left: 12,
+                  child: BlocBuilder<DrowsinessCubit, DrowsinessState>(
+                    builder: (context, drowsinessState) {
+                      return _DriverConditionPanel(state: drowsinessState);
+                    },
+                  ),
+                ),
 
                 // ── 4. Bottom controls ────────────────────────────────────────
                 Positioned(
@@ -833,6 +892,122 @@ class _DrowsinessIndicator extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DriverConditionPanel extends StatelessWidget {
+  const _DriverConditionPanel({required this.state});
+
+  final DrowsinessState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool drowsyNow = state.isDrowsy;
+    final Color statusColor = drowsyNow ? AppColors.warning : AppColors.success;
+    final String statusText = drowsyNow ? 'SOMNOLIENTO' : 'BIEN';
+
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor, width: 1.6),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                drowsyNow ? Icons.bedtime : Icons.check_circle,
+                size: 16,
+                color: statusColor,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Estado del conductor',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            statusText,
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _PanelMetric(
+            label: 'Rostro',
+            value: state.faceDetected ? 'Detectado' : 'No detectado',
+          ),
+          _PanelMetric(
+            label: 'Ojos cerrados',
+            value: state.eyesClosed ? 'SI' : 'NO',
+          ),
+          _PanelMetric(
+            label: 'Bostezo',
+            value: state.yawning ? 'SI' : 'NO',
+          ),
+          _PanelMetric(
+            label: 'Score',
+            value: '${state.score}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelMetric extends StatelessWidget {
+  const _PanelMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

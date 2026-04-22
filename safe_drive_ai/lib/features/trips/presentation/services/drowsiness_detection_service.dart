@@ -44,7 +44,7 @@ class DrowsinessDetectionService {
             enableLandmarks: true,
             enableContours: true,
             enableTracking: true,
-            minFaceSize: 0.15,
+            minFaceSize: 0.08,
             performanceMode: FaceDetectorMode.fast,
           ),
         );
@@ -186,7 +186,8 @@ class DrowsinessDetectionService {
     final format = _resolveFormat(image.format.group);
     if (format == null) return null;
 
-    final bytes = _concatenatePlanes(image.planes);
+    final bytes = _bytesFromCameraImage(image);
+    if (bytes == null) return null;
 
     final metadata = InputImageMetadata(
       size: Size(image.width.toDouble(), image.height.toDouble()),
@@ -200,6 +201,8 @@ class DrowsinessDetectionService {
 
   InputImageFormat? _resolveFormat(ImageFormatGroup group) {
     switch (group) {
+      case ImageFormatGroup.nv21:
+        return InputImageFormat.nv21;
       case ImageFormatGroup.yuv420:
         return InputImageFormat.yuv_420_888;
       case ImageFormatGroup.bgra8888:
@@ -207,6 +210,16 @@ class DrowsinessDetectionService {
       default:
         return null;
     }
+  }
+
+  Uint8List? _bytesFromCameraImage(CameraImage image) {
+    if (image.planes.isEmpty) return null;
+
+    if (image.format.group == ImageFormatGroup.nv21) {
+      return image.planes.first.bytes;
+    }
+
+    return _concatenatePlanes(image.planes);
   }
 
   Uint8List _concatenatePlanes(List<Plane> planes) {
