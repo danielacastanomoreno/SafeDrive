@@ -375,9 +375,7 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
 
   Widget _buildLogoutButton() {
     return OutlinedButton.icon(
-      onPressed: () {
-        context.read<AuthBloc>().add(const AuthLogoutRequested());
-      },
+      onPressed: _showLogoutConfirmationDialog,
       icon: const Icon(
         Icons.logout,
         color: AppColors.error,
@@ -436,5 +434,37 @@ class _CompanyProfilePageState extends State<CompanyProfilePage> {
       fillColor: AppColors.background,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     );
+  }
+
+  Future<void> _showLogoutConfirmationDialog() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Cerrar sesión'),
+          content: const Text(
+            '¿Confirmas que quieres cerrar sesión?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+              child: const Text('Sí, cerrar sesión'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true) {
+      context.read<AuthBloc>().add(const AuthLogoutRequested());
+    }
   }
 }
