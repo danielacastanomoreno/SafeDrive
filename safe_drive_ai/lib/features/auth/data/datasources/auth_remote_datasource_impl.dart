@@ -291,6 +291,7 @@ class AuthRemoteDatasourceImpl implements AuthRemoteDatasource {
   @override
   Future<void> clearSession() async {
     await _prefs.remove(_keyUserId);
+    await _prefs.remove(_keyUserRole);
     await _prefs.remove(_keyActiveCompanyId);
   }
 }
