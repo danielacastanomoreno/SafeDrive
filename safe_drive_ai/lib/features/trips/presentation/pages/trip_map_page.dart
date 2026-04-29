@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
@@ -9,7 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vibration/vibration.dart';
 
@@ -18,7 +21,9 @@ import '../bloc/trip_bloc.dart';
 import '../bloc/trip_state.dart';
 import '../cubit/drowsiness_cubit.dart';
 import '../cubit/seatbelt_cubit.dart';
+import '../services/drowsiness_event_logger.dart';
 import '../services/voice_alert_service.dart';
+import '../services/voice_response_service.dart';
 import '../widgets/end_trip_dialog.dart';
 
 /// Mapa en vivo con traza azul y overlay de cámara frontal (conductor).
@@ -49,23 +54,42 @@ class _TripMapPageState extends State<TripMapPage>
 
   static const int _seatbeltFrameSkip = 10;
   static const int _drowsinessFrameSkip = 15;
-  static const Duration _drowsinessAlertCooldown = Duration(seconds: 3);
-    static const Duration _voiceAlertCooldown = Duration(seconds: 12);
-    static const Duration _longDrowsinessThreshold = Duration(seconds: 15);
-    static const String _voiceAlertMessage =
-      'Alerta de somnolencia. Por favor reacciona.';
-    static const String _voiceProlongedMessage =
-      'Somnolencia prolongada detectada. Deten el vehiculo y descansa.';
+  static const Duration _clipDuration = Duration(seconds: 20);
+  static const Duration _voiceResponseWindow = Duration(seconds: 5);
+  static const Duration _periodicInterval = Duration(minutes: 3);
+  static const Duration _periodicTick = Duration(seconds: 15);
+  static const Duration _periodicStepDuration = Duration(seconds: 3);
+  static const double _level1Volume = 0.7;
+  static const double _maxVolume = 1.0;
+    static const bool _enableClipRecording = false;
+  static const String _periodicPromptMessage =
+      '¿Estás bien? Di cualquier cosa para confirmar.';
+    static const String _drowsinessVoiceMessage =
+      'Somnolencia detectada. Por favor reacciona.';
+  static const String _noFaceMessage =
+      'No se detecta tu rostro.\n'
+      'Asegurate de que la camara frontal\n'
+      'tenga visibilidad de tu cara.';
+  static const String _cameraUnavailableMessage =
+      'Deteccion facial no disponible';
 
   Timer? _audioAlarmTimer;
-  Timer? _longDrowsinessTimer;
+  Timer? _periodicTimer;
   bool _seatbeltAlertActive = false;
-  DateTime? _lastDrowsinessAlertAt;
-  DateTime? _lastVoiceAlertAt;
-  bool _longDrowsinessAlerted = false;
+  bool _drowsinessAlertInProgress = false;
+  bool _periodicInProgress = false;
+  bool _isRecordingClip = false;
+  bool _alertVibrationActive = false;
+  int _lastAlertSequenceHandled = 0;
+  DateTime? _lastPeriodicResponseAt;
+  Completer<void>? _autoStopCompleter;
+  bool _autoStopTriggered = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _alertAudioPlayer = AudioPlayer();
   final VoiceAlertService _voiceAlertService = VoiceAlertService();
+  final VoiceResponseService _voiceResponseService = VoiceResponseService();
+  final DrowsinessEventLogger _eventLogger = DrowsinessEventLogger();
   late final AnimationController _blinkController;
   late final Animation<double> _blinkAnimation;
 
@@ -81,6 +105,7 @@ class _TripMapPageState extends State<TripMapPage>
       curve: Curves.easeInOut,
     );
     _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
+    _alertAudioPlayer.setPlayerMode(PlayerMode.lowLatency);
     _initCamera();
   }
 
@@ -152,9 +177,15 @@ class _TripMapPageState extends State<TripMapPage>
     }
     _frontController?.dispose();
     _audioAlarmTimer?.cancel();
-    _longDrowsinessTimer?.cancel();
+    _periodicTimer?.cancel();
     _audioPlayer.dispose();
+    _alertAudioPlayer.dispose();
     unawaited(_voiceAlertService.dispose());
+    unawaited(_voiceResponseService.dispose());
+    if (_alertVibrationActive) {
+      Vibration.cancel();
+      _alertVibrationActive = false;
+    }
     _blinkController.dispose();
     super.dispose();
   }
@@ -217,61 +248,309 @@ class _TripMapPageState extends State<TripMapPage>
     }
   }
 
-  void _triggerDrowsinessAlertIfNeeded(DrowsinessState state) {
-    final hasDrowsinessSignal = state.eyesClosed || state.yawning;
-    if (!hasDrowsinessSignal) return;
+  void _handleDrowsinessState(DrowsinessState state) {
+    if (!state.isDrowsy && _drowsinessAlertInProgress) {
+      _signalAutoStop();
+    }
+    final alert = state.lastAlert;
+    if (alert == null) return;
+    if (state.alertSequence == _lastAlertSequenceHandled) return;
+    _lastAlertSequenceHandled = state.alertSequence;
 
-    final now = DateTime.now();
-    final last = _lastDrowsinessAlertAt;
-    if (last != null && now.difference(last) < _drowsinessAlertCooldown) {
-      return;
+    final tripState = context.read<TripBloc>().state;
+    if (tripState is! TripActive) return;
+    if (!tripState.trip.hasCameraPermission) return;
+
+    unawaited(_processDrowsinessAlert(alert, tripState));
+  }
+
+  Future<void> _processDrowsinessAlert(
+    DrowsinessAlert alert,
+    TripActive tripState,
+  ) async {
+    if (_drowsinessAlertInProgress) return;
+    _drowsinessAlertInProgress = true;
+    _autoStopTriggered = false;
+    _autoStopCompleter = Completer<void>();
+
+    if (_periodicInProgress) {
+      _periodicInProgress = false;
+      await _stopAlertSound();
+      await _voiceResponseService.stop();
+      await _voiceAlertService.stop();
     }
 
-    _lastDrowsinessAlertAt = now;
-    debugPrint(
-      '[DROWSINESS] signal eyesClosed=${state.eyesClosed} yawning=${state.yawning} score=${state.score}',
+    final clipFuture = _recordDrowsinessClip(
+      tripId: tripState.trip.id,
+      level: alert.level,
+      triggeredAt: alert.triggeredAt,
     );
-    _triggerAlarmOnce();
-  }
 
-  void _handleDrowsinessVoiceAlerts(DrowsinessState state) {
-    if (!state.isDrowsy) {
-      _resetDrowsinessVoiceAlerts();
-      return;
+    unawaited(_voiceAlertService.speak(_drowsinessVoiceMessage));
+
+    final initialVolume =
+        alert.level == DrowsinessLevel.level1 ? _level1Volume : _maxVolume;
+    final initialVibration = alert.level == DrowsinessLevel.level2;
+
+    await _startAlertSound(
+      volume: initialVolume,
+      vibrate: initialVibration,
+    );
+
+    final respondedInWindow = await _waitForVoiceOrAutoStop(
+      duration: _voiceResponseWindow,
+    );
+
+    if (respondedInWindow) {
+      await _stopAlertSound();
+    } else {
+      await _startAlertSound(volume: _maxVolume, vibrate: true);
+      await _listenUntilResponse();
     }
 
-    _triggerVoiceAlertIfNeeded();
-    _scheduleLongDrowsinessAlert();
+    final clipPath = await clipFuture;
+    await _eventLogger.logEvent(
+      tripId: tripState.trip.id,
+      type: alert.level == DrowsinessLevel.level1
+          ? 'somnolencia nivel 1'
+          : 'somnolencia nivel 2',
+      status: respondedInWindow ? 'respondida' : 'no respondida',
+      timestamp: alert.triggeredAt,
+      clipPath: clipPath,
+    );
+
+    _drowsinessAlertInProgress = false;
   }
 
-  void _triggerVoiceAlertIfNeeded() {
-    final now = DateTime.now();
-    final last = _lastVoiceAlertAt;
-    if (last != null && now.difference(last) < _voiceAlertCooldown) {
-      return;
+  Future<void> _startAlertSound({
+    required double volume,
+    required bool vibrate,
+  }) async {
+    try {
+      await _alertAudioPlayer.stop();
+      await _alertAudioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _alertAudioPlayer.setVolume(volume);
+      await _alertAudioPlayer.play(
+        AssetSource('audio/alert_beep.wav'),
+        volume: volume,
+      );
+    } catch (e) {
+      debugPrint('[ALERT_AUDIO] failed to play alert_beep.wav: $e');
     }
 
-    _lastVoiceAlertAt = now;
-    unawaited(_voiceAlertService.speak(_voiceAlertMessage));
+    if (vibrate) {
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator) {
+        _alertVibrationActive = true;
+        Vibration.vibrate(pattern: [0, 400, 200, 400], repeat: 0);
+      } else {
+        HapticFeedback.heavyImpact();
+      }
+    }
   }
 
-  void _scheduleLongDrowsinessAlert() {
-    if (_longDrowsinessAlerted || _longDrowsinessTimer != null) return;
+  Future<void> _stopAlertSound() async {
+    try {
+      await _alertAudioPlayer.stop();
+      await _alertAudioPlayer.release();
+    } catch (_) {}
 
-    _longDrowsinessTimer = Timer(_longDrowsinessThreshold, () {
-      if (!mounted) return;
-      if (!context.read<DrowsinessCubit>().state.isDrowsy) return;
-      _longDrowsinessAlerted = true;
-      unawaited(_voiceAlertService.speak(_voiceProlongedMessage));
+    if (_alertVibrationActive) {
+      Vibration.cancel();
+      _alertVibrationActive = false;
+    } else {
+      Vibration.cancel();
+    }
+  }
+
+  Future<void> _playAlertStep({
+    required double volume,
+    required Duration duration,
+  }) async {
+    await _startAlertSound(volume: volume, vibrate: false);
+    await Future.delayed(duration);
+    await _stopAlertSound();
+  }
+
+  Future<void> _listenUntilResponse() async {
+    while (mounted) {
+      if (_autoStopTriggered) {
+        await _stopAlertSound();
+        return;
+      }
+      final tripState = context.read<TripBloc>().state;
+      if (tripState is! TripActive) return;
+      final responded = await _voiceResponseService.listenForResponse(
+        duration: _voiceResponseWindow,
+      );
+      if (responded) {
+        await _stopAlertSound();
+        return;
+      }
+    }
+  }
+
+  void _startPeriodicChecks(DateTime startTime) {
+    _lastPeriodicResponseAt ??= startTime;
+    _periodicTimer?.cancel();
+    _periodicTimer = Timer.periodic(_periodicTick, (_) {
+      if (_periodicInProgress || _drowsinessAlertInProgress) return;
+      final last = _lastPeriodicResponseAt ?? startTime;
+      if (DateTime.now().difference(last) >= _periodicInterval) {
+        unawaited(_runPeriodicVerification());
+      }
     });
   }
 
-  void _resetDrowsinessVoiceAlerts() {
-    _longDrowsinessTimer?.cancel();
-    _longDrowsinessTimer = null;
-    _longDrowsinessAlerted = false;
-    _lastVoiceAlertAt = null;
+  void _stopPeriodicChecks() {
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+  }
+
+  void _resetDrowsinessSession() {
+    _drowsinessAlertInProgress = false;
+    _periodicInProgress = false;
+    _lastAlertSequenceHandled = 0;
+    _lastPeriodicResponseAt = null;
+    _isRecordingClip = false;
+    _autoStopTriggered = false;
+    _autoStopCompleter = null;
+    _stopPeriodicChecks();
+    unawaited(_voiceResponseService.stop());
     unawaited(_voiceAlertService.stop());
+    unawaited(_stopAlertSound());
+  }
+
+  void _signalAutoStop() {
+    if (_autoStopTriggered) return;
+    _autoStopTriggered = true;
+    if (_autoStopCompleter != null && !_autoStopCompleter!.isCompleted) {
+      _autoStopCompleter!.complete();
+    }
+    unawaited(_voiceResponseService.stop());
+    unawaited(_stopAlertSound());
+  }
+
+  Future<bool> _waitForVoiceOrAutoStop({
+    required Duration duration,
+  }) async {
+    _autoStopCompleter ??= Completer<void>();
+    final voiceFuture = _voiceResponseService.listenForResponse(
+      duration: duration,
+    );
+    final result = await Future.any([
+      voiceFuture,
+      _autoStopCompleter!.future.then((_) => true),
+    ]);
+    return result == true;
+  }
+
+  Future<void> _runPeriodicVerification() async {
+    if (_periodicInProgress || _drowsinessAlertInProgress) return;
+    _periodicInProgress = true;
+
+    final startedAt = DateTime.now();
+    await _voiceAlertService.speak(_periodicPromptMessage);
+
+    final respondedInWindow =
+        await _voiceResponseService.listenForResponse(
+      duration: _voiceResponseWindow,
+    );
+
+    if (respondedInWindow) {
+      await _eventLogger.logEvent(
+        tripId: _currentTripId(),
+        type: 'alerta periodica',
+        status: 'respondida',
+        timestamp: startedAt,
+      );
+      _lastPeriodicResponseAt = DateTime.now();
+      _periodicInProgress = false;
+      return;
+    }
+
+    await _eventLogger.logEvent(
+      tripId: _currentTripId(),
+      type: 'alerta periodica',
+      status: 'no respondida - posible microsueno',
+      timestamp: startedAt,
+    );
+
+    await _playAlertStep(volume: 0.5, duration: _periodicStepDuration);
+    if (_drowsinessAlertInProgress) {
+      _periodicInProgress = false;
+      return;
+    }
+
+    await _playAlertStep(volume: 0.8, duration: _periodicStepDuration);
+    if (_drowsinessAlertInProgress) {
+      _periodicInProgress = false;
+      return;
+    }
+
+    await _startAlertSound(volume: _maxVolume, vibrate: true);
+    await _listenUntilResponse();
+    await _stopAlertSound();
+
+    _lastPeriodicResponseAt = DateTime.now();
+    _periodicInProgress = false;
+  }
+
+  String _currentTripId() {
+    final tripState = context.read<TripBloc>().state;
+    if (tripState is TripActive) {
+      return tripState.trip.id;
+    }
+    return 'unknown';
+  }
+
+  Future<String?> _recordDrowsinessClip({
+    required String tripId,
+    required DrowsinessLevel level,
+    required DateTime triggeredAt,
+  }) async {
+    // Tipo B: grabar 20s posteriores al evento (sin prebuffer).
+    if (!_enableClipRecording) return null;
+    final controller = _frontController;
+    if (controller == null || !controller.value.isInitialized) return null;
+    if (_isRecordingClip) return null;
+
+    context.read<DrowsinessCubit>().reset();
+    _isRecordingClip = true;
+    final wasStreaming = controller.value.isStreamingImages;
+
+    try {
+      if (wasStreaming) {
+        await controller.stopImageStream();
+      }
+
+      await controller.startVideoRecording();
+      await Future.delayed(_clipDuration);
+      final file = await controller.stopVideoRecording();
+
+      final directory = await getApplicationDocumentsDirectory();
+      final clipsDir = Directory('${directory.path}/drowsiness_clips');
+      await clipsDir.create(recursive: true);
+
+      final formatter = DateFormat('yyyyMMdd_HHmmss');
+      final safeTripId = tripId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      final levelLabel =
+          level == DrowsinessLevel.level1 ? 'nivel1' : 'nivel2';
+      final fileName =
+          'trip_${safeTripId}_${levelLabel}_${formatter.format(triggeredAt)}.mp4';
+      final targetPath = '${clipsDir.path}/$fileName';
+
+      await File(file.path).copy(targetPath);
+      return targetPath;
+    } catch (e) {
+      debugPrint('[DROWSINESS_CLIP] recording failed: $e');
+      return null;
+    } finally {
+      if (wasStreaming && mounted && controller.value.isInitialized) {
+        await controller.startImageStream(_onCameraImage);
+      }
+      _isRecordingClip = false;
+    }
   }
 
   Future<void> _triggerAlarmOnce() async {
@@ -349,8 +628,7 @@ class _TripMapPageState extends State<TripMapPage>
         if (state is! TripActive) {
           _stopCameraStream();
           _setSeatbeltAlert(false);
-          _lastDrowsinessAlertAt = null;
-          _resetDrowsinessVoiceAlerts();
+          _resetDrowsinessSession();
           context.read<SeatbeltCubit>().reset();
           context.read<DrowsinessCubit>().reset();
           return;
@@ -359,6 +637,9 @@ class _TripMapPageState extends State<TripMapPage>
         if (state.isNewlyStarted) {
           // Permission was just granted — re-try camera init
           _initCamera();
+        }
+        if (_periodicTimer == null) {
+          _startPeriodicChecks(state.trip.startTime);
         }
         if (state.route.isNotEmpty && _followDriver) {
           _mapController.move(state.route.last, _mapController.camera.zoom);
@@ -383,10 +664,9 @@ class _TripMapPageState extends State<TripMapPage>
             BlocListener<DrowsinessCubit, DrowsinessState>(
               listener: (context, drowsinessState) {
                 debugPrint(
-                  '[DROWSINESS] face=${drowsinessState.faceDetected} eyes=${drowsinessState.eyesClosed} yawn=${drowsinessState.yawning} score=${drowsinessState.score} drowsy=${drowsinessState.isDrowsy}',
+                  '[DROWSINESS] face=${drowsinessState.faceDetected} eyes=${drowsinessState.eyesClosed} headDown=${drowsinessState.headDown} drowsy=${drowsinessState.isDrowsy} missing=${drowsinessState.faceMissing}',
                 );
-                _triggerDrowsinessAlertIfNeeded(drowsinessState);
-                _handleDrowsinessVoiceAlerts(drowsinessState);
+                _handleDrowsinessState(drowsinessState);
               },
             ),
           ],
@@ -521,6 +801,49 @@ class _TripMapPageState extends State<TripMapPage>
                           ),
                         );
                       },
+                    );
+                  },
+                ),
+
+                if (!state.trip.hasCameraPermission)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _AlertBanner(
+                      message: _cameraUnavailableMessage,
+                      color: Colors.black54,
+                      topPadding: MediaQuery.of(context).padding.top + 4,
+                    ),
+                  ),
+
+                BlocBuilder<DrowsinessCubit, DrowsinessState>(
+                  builder: (context, drowsinessState) {
+                    if (!drowsinessState.faceMissing) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: AppColors.warning, width: 1),
+                        ),
+                        child: const Text(
+                          _noFaceMessage,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -910,7 +1233,10 @@ class _DrowsinessIndicator extends StatelessWidget {
     final Color bgColor;
     final String symbol;
 
-    if (state.isDrowsy) {
+    if (state.faceMissing) {
+      bgColor = AppColors.warning;
+      symbol = '!';
+    } else if (state.isDrowsy) {
       bgColor = AppColors.warning;
       symbol = '!';
     } else if (state.faceDetected) {
@@ -922,11 +1248,13 @@ class _DrowsinessIndicator extends StatelessWidget {
     }
 
     return Tooltip(
-      message: state.isDrowsy
+      message: state.faceMissing
+        ? 'Rostro no detectado'
+        : state.isDrowsy
           ? (state.reason ?? 'Somnolencia detectada')
           : state.faceDetected
-              ? 'Sin somnolencia detectada'
-              : 'Analizando rostro...',
+            ? 'Sin somnolencia detectada'
+            : 'Analizando rostro...',
       child: Container(
         width: 20,
         height: 20,
@@ -962,6 +1290,8 @@ class _DriverConditionPanel extends StatelessWidget {
     final bool drowsyNow = state.isDrowsy;
     final Color statusColor = drowsyNow ? AppColors.warning : AppColors.success;
     final String statusText = drowsyNow ? 'SOMNOLIENTO' : 'BIEN';
+    final eyesSeconds =
+      (state.eyesClosedDuration.inMilliseconds / 1000).toStringAsFixed(1);
 
     return Container(
       width: 210,
@@ -1020,12 +1350,22 @@ class _DriverConditionPanel extends StatelessWidget {
             value: state.eyesClosed ? 'SI' : 'NO',
           ),
           _PanelMetric(
+            label: 'Duracion ojos',
+            value: '${eyesSeconds}s',
+          ),
+          _PanelMetric(
+            label: 'Cabeceo',
+            value: state.headDown ? 'SI' : 'NO',
+          ),
+          _PanelMetric(
             label: 'Bostezo',
             value: state.yawning ? 'SI' : 'NO',
           ),
           _PanelMetric(
-            label: 'Score',
-            value: '${state.score}',
+            label: 'Pitch',
+            value: state.headPitch != null
+                ? state.headPitch!.toStringAsFixed(1)
+                : '-',
           ),
         ],
       ),
