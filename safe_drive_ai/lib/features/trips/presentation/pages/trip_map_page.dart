@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +16,9 @@ import 'package:vibration/vibration.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../bloc/trip_bloc.dart';
 import '../bloc/trip_state.dart';
+import '../cubit/drowsiness_cubit.dart';
 import '../cubit/seatbelt_cubit.dart';
+import '../services/voice_alert_service.dart';
 import '../widgets/end_trip_dialog.dart';
 
 /// Mapa en vivo con traza azul y overlay de cámara frontal (conductor).
@@ -38,15 +41,31 @@ class _TripMapPageState extends State<TripMapPage>
 
   // ── Front camera (selfie — conductor) ────────────────────────────────────
   CameraController? _frontController;
+  CameraDescription? _frontCamera;
   bool _frontReady = false;
   bool _frontVisible = true;
   InputImageRotation _imageRotation = InputImageRotation.rotation0deg;
   int _frameCounter = 0;
 
-  static const int _frameSkip = 10;
+  static const int _seatbeltFrameSkip = 10;
+  static const int _drowsinessFrameSkip = 15;
+  static const Duration _drowsinessAlertCooldown = Duration(seconds: 3);
+    static const Duration _voiceAlertCooldown = Duration(seconds: 12);
+    static const Duration _longDrowsinessThreshold = Duration(seconds: 15);
+    static const String _voiceAlertMessage =
+      'Alerta de somnolencia. Por favor reacciona.';
+    static const String _voiceProlongedMessage =
+      'Somnolencia prolongada detectada. Deten el vehiculo y descansa.';
 
   Timer? _audioAlarmTimer;
+  Timer? _longDrowsinessTimer;
+  bool _seatbeltAlertActive = false;
+  DateTime? _lastDrowsinessAlertAt;
+  DateTime? _lastVoiceAlertAt;
+  bool _longDrowsinessAlerted = false;
+
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final VoiceAlertService _voiceAlertService = VoiceAlertService();
   late final AnimationController _blinkController;
   late final Animation<double> _blinkAnimation;
 
@@ -61,6 +80,7 @@ class _TripMapPageState extends State<TripMapPage>
       parent: _blinkController,
       curve: Curves.easeInOut,
     );
+    _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
     _initCamera();
   }
 
@@ -90,13 +110,17 @@ class _TripMapPageState extends State<TripMapPage>
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    _imageRotation = _rotationFromSensorDegrees(frontCam.sensorOrientation);
+
+    final imageFormatGroup =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888;
 
     final ctrl = CameraController(
       frontCam,
       ResolutionPreset.low,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: imageFormatGroup,
     );
     try {
       await ctrl.initialize();
@@ -104,9 +128,14 @@ class _TripMapPageState extends State<TripMapPage>
         await ctrl.dispose();
         return;
       }
+      _imageRotation = _rotationFromCamera(
+        frontCam,
+        ctrl.value.deviceOrientation,
+      );
       await ctrl.startImageStream(_onCameraImage);
       setState(() {
         _frontController = ctrl;
+        _frontCamera = frontCam;
         _frontReady = true;
       });
     } catch (_) {
@@ -123,7 +152,9 @@ class _TripMapPageState extends State<TripMapPage>
     }
     _frontController?.dispose();
     _audioAlarmTimer?.cancel();
+    _longDrowsinessTimer?.cancel();
     _audioPlayer.dispose();
+    unawaited(_voiceAlertService.dispose());
     _blinkController.dispose();
     super.dispose();
   }
@@ -131,10 +162,25 @@ class _TripMapPageState extends State<TripMapPage>
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   void _onCameraImage(CameraImage image) {
-    _frameCounter++;
-    if (_frameCounter % _frameSkip != 0 || !mounted) return;
+    final frontController = _frontController;
+    final frontCamera = _frontCamera;
+    if (frontController != null && frontCamera != null) {
+      _imageRotation = _rotationFromCamera(
+        frontCamera,
+        frontController.value.deviceOrientation,
+      );
+    }
 
-    context.read<SeatbeltCubit>().processFrame(image, _imageRotation);
+    _frameCounter++;
+    if (!mounted) return;
+
+    if (_frameCounter % _seatbeltFrameSkip == 0) {
+      context.read<SeatbeltCubit>().processFrame(image, _imageRotation);
+    }
+
+    if (_frameCounter % _drowsinessFrameSkip == 0) {
+      context.read<DrowsinessCubit>().processFrame(image, _imageRotation);
+    }
   }
 
   void _stopCameraStream() {
@@ -144,17 +190,88 @@ class _TripMapPageState extends State<TripMapPage>
     }
   }
 
-  void _startSeatbeltAlarm() {
+  void _startAlertAlarm() {
     if (_audioAlarmTimer != null) return;
     _triggerAlarmOnce();
     _audioAlarmTimer =
-        Timer.periodic(const Duration(seconds: 10), (_) => _triggerAlarmOnce());
+        Timer.periodic(const Duration(seconds: 8), (_) => _triggerAlarmOnce());
   }
 
-  void _stopSeatbeltAlarm() {
+  void _stopAlertAlarm() {
     _audioAlarmTimer?.cancel();
     _audioAlarmTimer = null;
     _audioPlayer.stop();
+  }
+
+  void _setSeatbeltAlert(bool active) {
+    if (_seatbeltAlertActive == active) return;
+    _seatbeltAlertActive = active;
+    _syncAlertAlarm();
+  }
+
+  void _syncAlertAlarm() {
+    if (_seatbeltAlertActive) {
+      _startAlertAlarm();
+    } else {
+      _stopAlertAlarm();
+    }
+  }
+
+  void _triggerDrowsinessAlertIfNeeded(DrowsinessState state) {
+    final hasDrowsinessSignal = state.eyesClosed || state.yawning;
+    if (!hasDrowsinessSignal) return;
+
+    final now = DateTime.now();
+    final last = _lastDrowsinessAlertAt;
+    if (last != null && now.difference(last) < _drowsinessAlertCooldown) {
+      return;
+    }
+
+    _lastDrowsinessAlertAt = now;
+    debugPrint(
+      '[DROWSINESS] signal eyesClosed=${state.eyesClosed} yawning=${state.yawning} score=${state.score}',
+    );
+    _triggerAlarmOnce();
+  }
+
+  void _handleDrowsinessVoiceAlerts(DrowsinessState state) {
+    if (!state.isDrowsy) {
+      _resetDrowsinessVoiceAlerts();
+      return;
+    }
+
+    _triggerVoiceAlertIfNeeded();
+    _scheduleLongDrowsinessAlert();
+  }
+
+  void _triggerVoiceAlertIfNeeded() {
+    final now = DateTime.now();
+    final last = _lastVoiceAlertAt;
+    if (last != null && now.difference(last) < _voiceAlertCooldown) {
+      return;
+    }
+
+    _lastVoiceAlertAt = now;
+    unawaited(_voiceAlertService.speak(_voiceAlertMessage));
+  }
+
+  void _scheduleLongDrowsinessAlert() {
+    if (_longDrowsinessAlerted || _longDrowsinessTimer != null) return;
+
+    _longDrowsinessTimer = Timer(_longDrowsinessThreshold, () {
+      if (!mounted) return;
+      if (!context.read<DrowsinessCubit>().state.isDrowsy) return;
+      _longDrowsinessAlerted = true;
+      unawaited(_voiceAlertService.speak(_voiceProlongedMessage));
+    });
+  }
+
+  void _resetDrowsinessVoiceAlerts() {
+    _longDrowsinessTimer?.cancel();
+    _longDrowsinessTimer = null;
+    _longDrowsinessAlerted = false;
+    _lastVoiceAlertAt = null;
+    unawaited(_voiceAlertService.stop());
   }
 
   Future<void> _triggerAlarmOnce() async {
@@ -168,23 +285,39 @@ class _TripMapPageState extends State<TripMapPage>
     SystemSound.play(SystemSoundType.alert);
 
     try {
-      await _audioPlayer.play(AssetSource('audio/seatbelt_alert.mp3'));
-    } catch (_) {
-      // The app still warns with vibration and the platform alert sound.
+      await _audioPlayer.stop();
+      await _audioPlayer.setVolume(1.0);
+      await _audioPlayer.play(
+        AssetSource('audio/alert_beep.wav'),
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('[ALERT_AUDIO] failed to play alert_beep.wav: $e');
     }
   }
 
-  InputImageRotation _rotationFromSensorDegrees(int degrees) {
-    switch (degrees) {
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      default:
-        return InputImageRotation.rotation0deg;
-    }
+  InputImageRotation _rotationFromCamera(
+    CameraDescription camera,
+    DeviceOrientation deviceOrientation,
+  ) {
+    final deviceDegrees = switch (deviceOrientation) {
+      DeviceOrientation.portraitUp => 0,
+      DeviceOrientation.landscapeLeft => 90,
+      DeviceOrientation.portraitDown => 180,
+      DeviceOrientation.landscapeRight => 270,
+    };
+
+    final sensorDegrees = camera.sensorOrientation;
+    final rotationDegrees = camera.lensDirection == CameraLensDirection.front
+        ? (sensorDegrees + deviceDegrees) % 360
+        : (sensorDegrees - deviceDegrees + 360) % 360;
+
+    return switch (rotationDegrees) {
+      90 => InputImageRotation.rotation90deg,
+      180 => InputImageRotation.rotation180deg,
+      270 => InputImageRotation.rotation270deg,
+      _ => InputImageRotation.rotation0deg,
+    };
   }
 
   String _formatElapsed(Duration d) {
@@ -215,8 +348,11 @@ class _TripMapPageState extends State<TripMapPage>
       listener: (context, state) {
         if (state is! TripActive) {
           _stopCameraStream();
-          _stopSeatbeltAlarm();
+          _setSeatbeltAlert(false);
+          _lastDrowsinessAlertAt = null;
+          _resetDrowsinessVoiceAlerts();
           context.read<SeatbeltCubit>().reset();
+          context.read<DrowsinessCubit>().reset();
           return;
         }
 
@@ -237,14 +373,23 @@ class _TripMapPageState extends State<TripMapPage>
         final topPadding = MediaQuery.of(context).padding.top;
         final overlayTop = topPadding + 80.0;
 
-        return BlocListener<SeatbeltCubit, SeatbeltState>(
-          listener: (context, seatbeltState) {
-            if (seatbeltState is SeatbeltNotDetected) {
-              _startSeatbeltAlarm();
-            } else {
-              _stopSeatbeltAlarm();
-            }
-          },
+        return MultiBlocListener(
+          listeners: [
+            BlocListener<SeatbeltCubit, SeatbeltState>(
+              listener: (context, seatbeltState) {
+                _setSeatbeltAlert(seatbeltState is SeatbeltNotDetected);
+              },
+            ),
+            BlocListener<DrowsinessCubit, DrowsinessState>(
+              listener: (context, drowsinessState) {
+                debugPrint(
+                  '[DROWSINESS] face=${drowsinessState.faceDetected} eyes=${drowsinessState.eyesClosed} yawn=${drowsinessState.yawning} score=${drowsinessState.score} drowsy=${drowsinessState.isDrowsy}',
+                );
+                _triggerDrowsinessAlertIfNeeded(drowsinessState);
+                _handleDrowsinessVoiceAlerts(drowsinessState);
+              },
+            ),
+          ],
           child: Scaffold(
             backgroundColor: Colors.black,
             body: Stack(
@@ -337,45 +482,45 @@ class _TripMapPageState extends State<TripMapPage>
                 // ── 2. Top bar ────────────────────────────────────────────────
                 BlocBuilder<SeatbeltCubit, SeatbeltState>(
                   builder: (context, seatbeltState) {
-                    if (seatbeltState is! SeatbeltNotDetected) {
-                      return const SizedBox.shrink();
-                    }
-                    return Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: FadeTransition(
-                        opacity: _blinkAnimation,
-                        child: Container(
-                          color: AppColors.error,
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            MediaQuery.of(context).padding.top + 4,
-                            16,
-                            8,
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.warning_amber_rounded,
-                                  color: Colors.white, size: 20),
-                              SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  'PONTE EL CINTURON DE SEGURIDAD',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
+                    return BlocBuilder<DrowsinessCubit, DrowsinessState>(
+                      builder: (context, drowsinessState) {
+                        final showSeatbeltWarning =
+                            seatbeltState is SeatbeltNotDetected;
+                        final showDrowsinessWarning = drowsinessState.isDrowsy;
+
+                        if (!showSeatbeltWarning && !showDrowsinessWarning) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final topInset = MediaQuery.of(context).padding.top + 4;
+
+                        return Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: FadeTransition(
+                            opacity: _blinkAnimation,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (showDrowsinessWarning)
+                                  _AlertBanner(
+                                    message: 'ALERTA DE SOMNOLENCIA',
+                                    color: AppColors.warning,
+                                    topPadding: topInset,
                                   ),
-                                ),
-                              ),
-                            ],
+                                if (showSeatbeltWarning)
+                                  _AlertBanner(
+                                    message: 'PONTE EL CINTURON DE SEGURIDAD',
+                                    color: AppColors.error,
+                                    topPadding:
+                                        showDrowsinessWarning ? 4 : topInset,
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -448,11 +593,17 @@ class _TripMapPageState extends State<TripMapPage>
                     child: _frontVisible
                         ? BlocBuilder<SeatbeltCubit, SeatbeltState>(
                             builder: (context, seatbeltState) {
-                              return _CameraOverlay(
-                                controller: _frontController!,
-                                seatbeltState: seatbeltState,
-                                onClose: () =>
-                                    setState(() => _frontVisible = false),
+                              return BlocBuilder<DrowsinessCubit,
+                                  DrowsinessState>(
+                                builder: (context, drowsinessState) {
+                                  return _CameraOverlay(
+                                    controller: _frontController!,
+                                    seatbeltState: seatbeltState,
+                                    drowsinessState: drowsinessState,
+                                    onClose: () =>
+                                        setState(() => _frontVisible = false),
+                                  );
+                                },
                               );
                             },
                           )
@@ -462,6 +613,16 @@ class _TripMapPageState extends State<TripMapPage>
                             tooltip: 'Mostrar cámara',
                           ),
                   ),
+
+                Positioned(
+                  top: overlayTop,
+                  left: 12,
+                  child: BlocBuilder<DrowsinessCubit, DrowsinessState>(
+                    builder: (context, drowsinessState) {
+                      return _DriverConditionPanel(state: drowsinessState);
+                    },
+                  ),
+                ),
 
                 // ── 4. Bottom controls ────────────────────────────────────────
                 Positioned(
@@ -547,16 +708,19 @@ class _CameraOverlay extends StatelessWidget {
   const _CameraOverlay({
     required this.controller,
     required this.seatbeltState,
+    required this.drowsinessState,
     required this.onClose,
   });
 
   final CameraController controller;
   final SeatbeltState seatbeltState;
+  final DrowsinessState drowsinessState;
   final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = _seatbeltBorderColor(seatbeltState);
+    final borderColor = _cameraBorderColor(
+        seatbeltState: seatbeltState, drowsinessState: drowsinessState);
 
     return Container(
       width: 110,
@@ -598,6 +762,11 @@ class _CameraOverlay extends StatelessWidget {
             child: _SeatbeltIndicator(state: seatbeltState),
           ),
           Positioned(
+            bottom: 22,
+            right: 4,
+            child: _DrowsinessIndicator(state: drowsinessState),
+          ),
+          Positioned(
             bottom: 0,
             left: 0,
             right: 0,
@@ -627,6 +796,56 @@ Color _seatbeltBorderColor(SeatbeltState state) {
   if (state is SeatbeltDetected) return AppColors.success;
   if (state is SeatbeltNotDetected) return AppColors.error;
   return Colors.white;
+}
+
+Color _cameraBorderColor({
+  required SeatbeltState seatbeltState,
+  required DrowsinessState drowsinessState,
+}) {
+  if (drowsinessState.isDrowsy) {
+    return AppColors.warning;
+  }
+  return _seatbeltBorderColor(seatbeltState);
+}
+
+class _AlertBanner extends StatelessWidget {
+  const _AlertBanner({
+    required this.message,
+    required this.color,
+    required this.topPadding,
+  });
+
+  final String message;
+  final Color color;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: color,
+      padding: EdgeInsets.fromLTRB(16, topPadding, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.white, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SeatbeltIndicator extends StatelessWidget {
@@ -676,6 +895,174 @@ class _SeatbeltIndicator extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DrowsinessIndicator extends StatelessWidget {
+  const _DrowsinessIndicator({required this.state});
+
+  final DrowsinessState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bgColor;
+    final String symbol;
+
+    if (state.isDrowsy) {
+      bgColor = AppColors.warning;
+      symbol = '!';
+    } else if (state.faceDetected) {
+      bgColor = AppColors.success;
+      symbol = 'Z';
+    } else {
+      bgColor = Colors.grey.shade600;
+      symbol = '?';
+    }
+
+    return Tooltip(
+      message: state.isDrowsy
+          ? (state.reason ?? 'Somnolencia detectada')
+          : state.faceDetected
+              ? 'Sin somnolencia detectada'
+              : 'Analizando rostro...',
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(color: Colors.black38, blurRadius: 3),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            symbol,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DriverConditionPanel extends StatelessWidget {
+  const _DriverConditionPanel({required this.state});
+
+  final DrowsinessState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool drowsyNow = state.isDrowsy;
+    final Color statusColor = drowsyNow ? AppColors.warning : AppColors.success;
+    final String statusText = drowsyNow ? 'SOMNOLIENTO' : 'BIEN';
+
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor, width: 1.6),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                drowsyNow ? Icons.bedtime : Icons.check_circle,
+                size: 16,
+                color: statusColor,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Estado del conductor',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            statusText,
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _PanelMetric(
+            label: 'Rostro',
+            value: state.faceDetected ? 'Detectado' : 'No detectado',
+          ),
+          _PanelMetric(
+            label: 'Ojos cerrados',
+            value: state.eyesClosed ? 'SI' : 'NO',
+          ),
+          _PanelMetric(
+            label: 'Bostezo',
+            value: state.yawning ? 'SI' : 'NO',
+          ),
+          _PanelMetric(
+            label: 'Score',
+            value: '${state.score}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelMetric extends StatelessWidget {
+  const _PanelMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
