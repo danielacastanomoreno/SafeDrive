@@ -18,6 +18,7 @@ import '../bloc/trip_bloc.dart';
 import '../bloc/trip_state.dart';
 import '../cubit/drowsiness_cubit.dart';
 import '../cubit/seatbelt_cubit.dart';
+import '../services/voice_alert_service.dart';
 import '../widgets/end_trip_dialog.dart';
 
 /// Mapa en vivo con traza azul y overlay de cámara frontal (conductor).
@@ -49,12 +50,22 @@ class _TripMapPageState extends State<TripMapPage>
   static const int _seatbeltFrameSkip = 10;
   static const int _drowsinessFrameSkip = 15;
   static const Duration _drowsinessAlertCooldown = Duration(seconds: 3);
+    static const Duration _voiceAlertCooldown = Duration(seconds: 12);
+    static const Duration _longDrowsinessThreshold = Duration(seconds: 15);
+    static const String _voiceAlertMessage =
+      'Alerta de somnolencia. Por favor reacciona.';
+    static const String _voiceProlongedMessage =
+      'Somnolencia prolongada detectada. Deten el vehiculo y descansa.';
 
   Timer? _audioAlarmTimer;
+  Timer? _longDrowsinessTimer;
   bool _seatbeltAlertActive = false;
   DateTime? _lastDrowsinessAlertAt;
+  DateTime? _lastVoiceAlertAt;
+  bool _longDrowsinessAlerted = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final VoiceAlertService _voiceAlertService = VoiceAlertService();
   late final AnimationController _blinkController;
   late final Animation<double> _blinkAnimation;
 
@@ -141,7 +152,9 @@ class _TripMapPageState extends State<TripMapPage>
     }
     _frontController?.dispose();
     _audioAlarmTimer?.cancel();
+    _longDrowsinessTimer?.cancel();
     _audioPlayer.dispose();
+    unawaited(_voiceAlertService.dispose());
     _blinkController.dispose();
     super.dispose();
   }
@@ -221,6 +234,46 @@ class _TripMapPageState extends State<TripMapPage>
     _triggerAlarmOnce();
   }
 
+  void _handleDrowsinessVoiceAlerts(DrowsinessState state) {
+    if (!state.isDrowsy) {
+      _resetDrowsinessVoiceAlerts();
+      return;
+    }
+
+    _triggerVoiceAlertIfNeeded();
+    _scheduleLongDrowsinessAlert();
+  }
+
+  void _triggerVoiceAlertIfNeeded() {
+    final now = DateTime.now();
+    final last = _lastVoiceAlertAt;
+    if (last != null && now.difference(last) < _voiceAlertCooldown) {
+      return;
+    }
+
+    _lastVoiceAlertAt = now;
+    unawaited(_voiceAlertService.speak(_voiceAlertMessage));
+  }
+
+  void _scheduleLongDrowsinessAlert() {
+    if (_longDrowsinessAlerted || _longDrowsinessTimer != null) return;
+
+    _longDrowsinessTimer = Timer(_longDrowsinessThreshold, () {
+      if (!mounted) return;
+      if (!context.read<DrowsinessCubit>().state.isDrowsy) return;
+      _longDrowsinessAlerted = true;
+      unawaited(_voiceAlertService.speak(_voiceProlongedMessage));
+    });
+  }
+
+  void _resetDrowsinessVoiceAlerts() {
+    _longDrowsinessTimer?.cancel();
+    _longDrowsinessTimer = null;
+    _longDrowsinessAlerted = false;
+    _lastVoiceAlertAt = null;
+    unawaited(_voiceAlertService.stop());
+  }
+
   Future<void> _triggerAlarmOnce() async {
     final hasVibrator = await Vibration.hasVibrator();
     if (hasVibrator) {
@@ -297,6 +350,7 @@ class _TripMapPageState extends State<TripMapPage>
           _stopCameraStream();
           _setSeatbeltAlert(false);
           _lastDrowsinessAlertAt = null;
+          _resetDrowsinessVoiceAlerts();
           context.read<SeatbeltCubit>().reset();
           context.read<DrowsinessCubit>().reset();
           return;
@@ -332,6 +386,7 @@ class _TripMapPageState extends State<TripMapPage>
                   '[DROWSINESS] face=${drowsinessState.faceDetected} eyes=${drowsinessState.eyesClosed} yawn=${drowsinessState.yawning} score=${drowsinessState.score} drowsy=${drowsinessState.isDrowsy}',
                 );
                 _triggerDrowsinessAlertIfNeeded(drowsinessState);
+                _handleDrowsinessVoiceAlerts(drowsinessState);
               },
             ),
           ],
