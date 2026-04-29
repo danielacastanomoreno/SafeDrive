@@ -10,34 +10,47 @@ class DrowsinessFrameResult {
   const DrowsinessFrameResult({
     required this.faceDetected,
     required this.eyesClosed,
+    required this.headDown,
     required this.yawning,
+    this.leftEyeOpenProbability,
+    this.rightEyeOpenProbability,
     this.averageEyeOpenProbability,
     this.mouthAspectRatio,
+    this.headPitch,
   });
 
   const DrowsinessFrameResult.unknown()
       : faceDetected = false,
         eyesClosed = false,
+        headDown = false,
         yawning = false,
+        leftEyeOpenProbability = null,
+        rightEyeOpenProbability = null,
         averageEyeOpenProbability = null,
-        mouthAspectRatio = null;
+        mouthAspectRatio = null,
+        headPitch = null;
 
   final bool faceDetected;
   final bool eyesClosed;
+  final bool headDown;
   final bool yawning;
+  final double? leftEyeOpenProbability;
+  final double? rightEyeOpenProbability;
   final double? averageEyeOpenProbability;
   final double? mouthAspectRatio;
+  final double? headPitch;
 }
 
-/// Servicio de detección de somnolencia con ML Kit Face Detection.
+/// Servicio de deteccion de somnolencia con ML Kit Face Detection.
 ///
-/// Señales usadas:
-/// - Ojos cerrados (probabilidad de apertura de ojos).
-/// - Bostezo (apertura relativa de labios, tipo MAR simplificado).
+/// Senales usadas:
+/// - Ojos cerrados (probabilidad de apertura de ambos ojos < 0.5).
+/// - Cabeceo (inclinacion hacia adelante del rostro).
 class DrowsinessDetectionService {
   DrowsinessDetectionService({
-    this.eyeOpenThreshold = 0.35,
-    this.yawnThreshold = 0.30,
+    this.eyeOpenThreshold = 0.5,
+    this.headDownThreshold = 15,
+    this.yawnThreshold = 0.42,
   }) : _detector = FaceDetector(
           options: FaceDetectorOptions(
             enableClassification: true,
@@ -52,7 +65,10 @@ class DrowsinessDetectionService {
   /// Umbral por debajo del cual consideramos ojos cerrados.
   final double eyeOpenThreshold;
 
-  /// Umbral de apertura bucal relativa para considerar bostezo.
+  /// Umbral de inclinacion hacia adelante (pitch) para cabeceo.
+  final double headDownThreshold;
+
+  /// Umbral de apertura bucal relativa para bostezo.
   final double yawnThreshold;
 
   final FaceDetector _detector;
@@ -95,14 +111,14 @@ class DrowsinessDetectionService {
       averageEyeOpenProbability = rightEyeOpen;
     }
 
-    final bool eyesClosed;
-    if (leftEyeOpen != null && rightEyeOpen != null) {
-      eyesClosed =
-          leftEyeOpen < eyeOpenThreshold && rightEyeOpen < eyeOpenThreshold;
-    } else {
-      eyesClosed = averageEyeOpenProbability != null &&
-          averageEyeOpenProbability < eyeOpenThreshold;
-    }
+    final bool eyesClosed = leftEyeOpen != null &&
+      rightEyeOpen != null &&
+      leftEyeOpen < eyeOpenThreshold &&
+      rightEyeOpen < eyeOpenThreshold;
+
+    final headPitch = face.headEulerAngleX;
+    final headDown = headPitch != null &&
+      (headPitch > headDownThreshold || headPitch < -headDownThreshold);
 
     final mar = _computeMouthAspectRatio(face);
     final yawning = mar != null && mar > yawnThreshold;
@@ -110,9 +126,13 @@ class DrowsinessDetectionService {
     return DrowsinessFrameResult(
       faceDetected: true,
       eyesClosed: eyesClosed,
+      headDown: headDown,
       yawning: yawning,
+      leftEyeOpenProbability: leftEyeOpen,
+      rightEyeOpenProbability: rightEyeOpen,
       averageEyeOpenProbability: averageEyeOpenProbability,
       mouthAspectRatio: mar,
+      headPitch: headPitch,
     );
   }
 
@@ -178,6 +198,7 @@ class DrowsinessDetectionService {
     final dy = y2 - y1;
     return sqrt(dx * dx + dy * dy);
   }
+
 
   InputImage? _buildInputImage(
     CameraImage image,
