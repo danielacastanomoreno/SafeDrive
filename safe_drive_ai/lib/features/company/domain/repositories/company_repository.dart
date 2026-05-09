@@ -74,7 +74,7 @@ abstract class CompanyRepository {
     required String cargo,
   });
 
-  /// Obtiene los viajes pendientes de aprobación de los conductores de esta empresa
+  /// Obtiene los viajes pendientes de aprobacion de los conductores de esta empresa
   Future<Either<Failure, List<TripEntity>>> getPendingTrips(String companyId);
 
   /// Aprueba el cierre remoto de un viaje
