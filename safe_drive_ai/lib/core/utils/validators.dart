@@ -31,7 +31,7 @@ class Validators {
   // ── Contraseña ─────────────────────────────────────────────────────────────
 
   /// Valida que la contraseña tenga al menos 8 caracteres, una mayúscula,
-  /// una minúscula, un número y un carácter especial (! @ # $ % &).
+  /// una minúscula, un número y un carácter especial (! @ # $ % & ; . ,).
   static String? password(String? value) {
     if (value == null || value.isEmpty) {
       return 'La contraseña es obligatoria.';
@@ -48,8 +48,8 @@ class Validators {
     if (!RegExp(r'[0-9]').hasMatch(value)) {
       return 'La contraseña debe contener al menos un número.';
     }
-    if (!RegExp(r'[!@#$%&]').hasMatch(value)) {
-      return 'La contraseña debe contener al menos un carácter especial (! @ # \$ % &).';
+    if (!RegExp(r'[!@#$%&;.,]').hasMatch(value)) {
+      return 'La contraseña debe contener al menos un carácter especial (! @ # \$ % & ; . ,).';
     }
     return null;
   }

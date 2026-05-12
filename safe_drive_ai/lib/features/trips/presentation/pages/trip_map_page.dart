@@ -54,14 +54,14 @@ class _TripMapPageState extends State<TripMapPage>
 
   static const int _seatbeltFrameSkip = 10;
   static const int _drowsinessFrameSkip = 15;
-  static const Duration _clipDuration = Duration(seconds: 20);
+  static const Duration _chunkDuration = Duration(seconds: 10);
   static const Duration _voiceResponseWindow = Duration(seconds: 5);
   static const Duration _periodicInterval = Duration(minutes: 3);
   static const Duration _periodicTick = Duration(seconds: 15);
   static const Duration _periodicStepDuration = Duration(seconds: 3);
   static const double _level1Volume = 0.7;
   static const double _maxVolume = 1.0;
-    static const bool _enableClipRecording = false;
+  static const bool _enableClipRecording = true;
   static const String _periodicPromptMessage =
       '¿Estás bien? Di cualquier cosa para confirmar.';
     static const String _drowsinessVoiceMessage =
@@ -78,12 +78,13 @@ class _TripMapPageState extends State<TripMapPage>
   bool _seatbeltAlertActive = false;
   bool _drowsinessAlertInProgress = false;
   bool _periodicInProgress = false;
-  bool _isRecordingClip = false;
   bool _alertVibrationActive = false;
   int _lastAlertSequenceHandled = 0;
   DateTime? _lastPeriodicResponseAt;
   Completer<void>? _autoStopCompleter;
   bool _autoStopTriggered = false;
+  bool _drowsinessClipRecordingActive = false;
+  CameraController? _clipRecordingController;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioPlayer _alertAudioPlayer = AudioPlayer();
@@ -280,21 +281,21 @@ class _TripMapPageState extends State<TripMapPage>
       await _voiceAlertService.stop();
     }
 
-    final clipFuture = _recordDrowsinessClip(
+    // Iniciar grabación de clips en paralelo sin bloquear detección
+    unawaited(_startIncrementalClipRecording(
       tripId: tripState.trip.id,
       level: alert.level,
       triggeredAt: alert.triggeredAt,
-    );
+    ));
 
     unawaited(_voiceAlertService.speak(_drowsinessVoiceMessage));
 
     final initialVolume =
         alert.level == DrowsinessLevel.level1 ? _level1Volume : _maxVolume;
-    final initialVibration = alert.level == DrowsinessLevel.level2;
 
-    await _startAlertSound(
+    await _vibrateOnce();
+    await _startAlertSoundNoVibration(
       volume: initialVolume,
-      vibrate: initialVibration,
     );
 
     final respondedInWindow = await _waitForVoiceOrAutoStop(
@@ -303,12 +304,13 @@ class _TripMapPageState extends State<TripMapPage>
 
     if (respondedInWindow) {
       await _stopAlertSound();
+      _drowsinessClipRecordingActive = false;
     } else {
-      await _startAlertSound(volume: _maxVolume, vibrate: true);
+      await _startAlertSoundNoVibration(volume: _maxVolume);
       await _listenUntilResponse();
+      _drowsinessClipRecordingActive = false;
     }
 
-    final clipPath = await clipFuture;
     await _eventLogger.logEvent(
       tripId: tripState.trip.id,
       type: alert.level == DrowsinessLevel.level1
@@ -316,10 +318,35 @@ class _TripMapPageState extends State<TripMapPage>
           : 'somnolencia nivel 2',
       status: respondedInWindow ? 'respondida' : 'no respondida',
       timestamp: alert.triggeredAt,
-      clipPath: clipPath,
+      clipPath: null,
     );
 
     _drowsinessAlertInProgress = false;
+  }
+
+  Future<void> _vibrateOnce() async {
+    final hasVibrator = await Vibration.hasVibrator();
+    if (hasVibrator) {
+      Vibration.vibrate(duration: 400);
+    } else {
+      HapticFeedback.heavyImpact();
+    }
+  }
+
+  Future<void> _startAlertSoundNoVibration({
+    required double volume,
+  }) async {
+    try {
+      await _alertAudioPlayer.stop();
+      await _alertAudioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _alertAudioPlayer.setVolume(volume);
+      await _alertAudioPlayer.play(
+        AssetSource('audio/alert_beep.wav'),
+        volume: volume,
+      );
+    } catch (e) {
+      debugPrint('[ALERT_AUDIO] failed to play alert_beep.wav: $e');
+    }
   }
 
   Future<void> _startAlertSound({
@@ -412,7 +439,7 @@ class _TripMapPageState extends State<TripMapPage>
     _periodicInProgress = false;
     _lastAlertSequenceHandled = 0;
     _lastPeriodicResponseAt = null;
-    _isRecordingClip = false;
+    _drowsinessClipRecordingActive = false;
     _autoStopTriggered = false;
     _autoStopCompleter = null;
     _stopPeriodicChecks();
@@ -504,52 +531,110 @@ class _TripMapPageState extends State<TripMapPage>
     return 'unknown';
   }
 
-  Future<String?> _recordDrowsinessClip({
+  Future<void> _startIncrementalClipRecording({
     required String tripId,
     required DrowsinessLevel level,
     required DateTime triggeredAt,
   }) async {
-    // Tipo B: grabar 20s posteriores al evento (sin prebuffer).
-    if (!_enableClipRecording) return null;
+    // Grabación de clips: parar stream → grabar chunk → reiniciar stream.
+    // Esto permite grabación sin conflictos y permite que la detección se resetee.
+    if (!_enableClipRecording) return;
+    if (_drowsinessClipRecordingActive) return;
+
+    _drowsinessClipRecordingActive = true;
     final controller = _frontController;
-    if (controller == null || !controller.value.isInitialized) return null;
-    if (_isRecordingClip) return null;
+    if (controller == null || !controller.value.isInitialized) {
+      _drowsinessClipRecordingActive = false;
+      return;
+    }
 
-    context.read<DrowsinessCubit>().reset();
-    _isRecordingClip = true;
-    final wasStreaming = controller.value.isStreamingImages;
+    final formatter = DateFormat('yyyyMMdd_HHmmss');
+    final safeTripId = tripId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final levelLabel = level == DrowsinessLevel.level1 ? 'nivel1' : 'nivel2';
 
+    final directory = await getApplicationDocumentsDirectory();
+    final clipsDir = Directory('${directory.path}/drowsiness_clips');
+    await clipsDir.create(recursive: true);
+
+    int chunkIndex = 0;
     try {
-      if (wasStreaming) {
-        await controller.stopImageStream();
+      while (_drowsinessClipRecordingActive && mounted && controller.value.isInitialized) {
+        try {
+          // PASO 1: Parar stream de imágenes
+          if (controller.value.isStreamingImages) {
+            await controller.stopImageStream();
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+
+          // PASO 2: Grabar chunk de 10s
+          await controller.startVideoRecording();
+          await Future.delayed(_chunkDuration);
+
+          if (!_drowsinessClipRecordingActive || !mounted) {
+            try {
+              if (controller.value.isRecordingVideo) {
+                await controller.stopVideoRecording();
+              }
+            } catch (_) {}
+            break;
+          }
+
+          // PASO 3: Detener grabación y guardar
+          if (controller.value.isRecordingVideo) {
+            final file = await controller.stopVideoRecording();
+            final fileName =
+                'trip_${safeTripId}_${levelLabel}_${formatter.format(triggeredAt)}_chunk$chunkIndex.mp4';
+            final targetPath = '${clipsDir.path}/$fileName';
+
+            try {
+              await File(file.path).copy(targetPath);
+              debugPrint('[DROWSINESS_CLIP] Chunk $chunkIndex guardado: $targetPath');
+              chunkIndex++;
+            } catch (e) {
+              debugPrint('[DROWSINESS_CLIP] Error guardando chunk: $e');
+            }
+          }
+
+          // PASO 4: SIEMPRE reiniciar stream de imágenes
+          if (mounted && controller.value.isInitialized) {
+            try {
+              await controller.startImageStream(_onCameraImage);
+              // Resetear detección al reiniciar stream
+              if (mounted) {
+                context.read<DrowsinessCubit>().reset();
+              }
+            } catch (e) {
+              debugPrint('[DROWSINESS_CLIP] Error reiniciando stream: $e');
+              break;
+            }
+          }
+
+          // Pequeña pausa antes del siguiente chunk
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (e) {
+          debugPrint('[DROWSINESS_CLIP] Error en chunk $chunkIndex: $e');
+          // Intentar reiniciar stream en caso de error
+          try {
+            if (mounted && controller.value.isInitialized && !controller.value.isStreamingImages) {
+              await controller.startImageStream(_onCameraImage);
+            }
+          } catch (_) {}
+          break;
+        }
       }
-
-      await controller.startVideoRecording();
-      await Future.delayed(_clipDuration);
-      final file = await controller.stopVideoRecording();
-
-      final directory = await getApplicationDocumentsDirectory();
-      final clipsDir = Directory('${directory.path}/drowsiness_clips');
-      await clipsDir.create(recursive: true);
-
-      final formatter = DateFormat('yyyyMMdd_HHmmss');
-      final safeTripId = tripId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-      final levelLabel =
-          level == DrowsinessLevel.level1 ? 'nivel1' : 'nivel2';
-      final fileName =
-          'trip_${safeTripId}_${levelLabel}_${formatter.format(triggeredAt)}.mp4';
-      final targetPath = '${clipsDir.path}/$fileName';
-
-      await File(file.path).copy(targetPath);
-      return targetPath;
-    } catch (e) {
-      debugPrint('[DROWSINESS_CLIP] recording failed: $e');
-      return null;
     } finally {
-      if (wasStreaming && mounted && controller.value.isInitialized) {
-        await controller.startImageStream(_onCameraImage);
-      }
-      _isRecordingClip = false;
+      // GARANTÍA: Reiniciar stream al terminar
+      try {
+        if (mounted && controller.value.isInitialized) {
+          if (!controller.value.isStreamingImages) {
+            await controller.startImageStream(_onCameraImage);
+          }
+          if (controller.value.isRecordingVideo) {
+            await controller.stopVideoRecording();
+          }
+        }
+      } catch (_) {}
+      _drowsinessClipRecordingActive = false;
     }
   }
 
