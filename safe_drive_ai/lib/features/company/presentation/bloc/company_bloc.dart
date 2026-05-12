@@ -255,14 +255,8 @@ class CompanyBloc extends Bloc<CompanyEvent, CompanyState> {
                 'Conductor registrado exitosamente. Se enviaron las credenciales a su correo.',
           ),
         );
-        // Recarga la lista de conductores para que aparezca el nuevo registro
-        final driversResult = await _getCompanyDriversUseCase(
-          GetCompanyDriversParams(companyId: event.companyId),
-        );
-        driversResult.fold(
-          (failure) => emit(CompanyError(message: failure.message)),
-          (drivers) => emit(CompanyDriversLoaded(drivers: drivers)),
-        );
+        // No recargamos la lista aquí para evitar que se cierre la página
+        // La página se cerrará y la lista se recargará cuando se vuelva a abrir
       },
     );
   }

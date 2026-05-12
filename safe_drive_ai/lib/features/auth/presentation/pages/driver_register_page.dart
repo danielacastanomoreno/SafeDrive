@@ -68,6 +68,14 @@ class _DriverRegisterPageState extends State<DriverRegisterPage> {
         listener: (context, state) {
           if (state is AuthDriverAuthenticated) {
             context.go('/driver/home', extra: state);
+          } else if (state is AuthError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
           }
         },
         builder: (context, state) {
@@ -155,10 +163,6 @@ class _DriverRegisterPageState extends State<DriverRegisterPage> {
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     const SizedBox(height: 24),
-                    if (state is AuthError) ...[
-                      AuthErrorWidget(message: state.message),
-                      const SizedBox(height: 16),
-                    ],
                     PrimaryButtonWidget(
                       label: 'Crear cuenta',
                       onPressed: isLoading ? null : _submit,
