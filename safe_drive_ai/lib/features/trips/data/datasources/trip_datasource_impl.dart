@@ -18,7 +18,20 @@ class TripDatasourceImpl implements TripDatasource {
     required bool hasCameraPermission,
     required DateTime startedAt,
   }) async {
-    // Check for existing active trips
+    // 1. Verificar si el conductor tiene algún vínculo activo en la colección company_drivers
+    final driverLinks = await _firestore
+        .collection('company_drivers')
+        .where('driverId', isEqualTo: driverId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    if (driverLinks.docs.isEmpty) {
+      throw const ServerException(
+        'No puedes iniciar viajes porque no tienes un vínculo activo con ninguna empresa.',
+      );
+    }
+
+    // 2. Check for existing active trips
     final existing = await _firestore
         .collection('trips')
         .where('driverId', isEqualTo: driverId)
@@ -30,7 +43,7 @@ class TripDatasourceImpl implements TripDatasource {
       throw const TripAlreadyActiveException();
     }
 
-    // Check for pending trips - accept the first one
+    // 3. Check for pending trips - accept the first one
     final pending = await _firestore
         .collection('trips')
         .where('driverId', isEqualTo: driverId)
@@ -39,8 +52,27 @@ class TripDatasourceImpl implements TripDatasource {
         .get();
 
     if (pending.docs.isNotEmpty) {
+      final pendingDoc = pending.docs.first;
+      final companyId = pendingDoc.data()['companyId'] as String?;
+
+      if (companyId != null) {
+        final specificLink = await _firestore
+            .collection('company_drivers')
+            .where('driverId', isEqualTo: driverId)
+            .where('companyId', isEqualTo: companyId)
+            .where('status', isEqualTo: 'active')
+            .limit(1)
+            .get();
+
+        if (specificLink.docs.isEmpty) {
+          throw const ServerException(
+            'No puedes iniciar este viaje porque ya no estás vinculado a la empresa asociada.',
+          );
+        }
+      }
+
       // Accept the pending trip - change status to active
-      final docRef = pending.docs.first.reference;
+      final docRef = pendingDoc.reference;
       final now = startedAt;
       await docRef.update({
         'startTime': Timestamp.fromDate(now),
@@ -53,13 +85,19 @@ class TripDatasourceImpl implements TripDatasource {
         startTime: now,
         hasCameraPermission: hasCameraPermission,
         status: TripStatus.active,
+        destinationLat: pendingDoc.data()['destinationLat'] as double?,
+        destinationLng: pendingDoc.data()['destinationLng'] as double?,
+        destinationAddress: pendingDoc.data()['destinationAddress'] as String?,
       );
     }
 
-    // No existing trip - create a new one
+    // 4. No existing trip - create a new one associated with the active company link
     final now = startedAt;
+    final activeCompanyId = driverLinks.docs.first.data()['companyId'] as String;
+
     final docRef = await _firestore.collection('trips').add({
       'driverId': driverId,
+      'companyId': activeCompanyId,
       'startTime': Timestamp.fromDate(now),
       'endTime': null,
       'hasCameraPermission': hasCameraPermission,

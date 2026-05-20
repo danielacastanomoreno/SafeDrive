@@ -127,9 +127,12 @@ class AppRouter {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           if (extra == null) return const SizedBox.shrink();
-          return CompanyDriverDetailPage(
-            link: extra['link'] as CompanyLinkEntity,
-            profile: extra['profile'] as UserEntity,
+          return BlocProvider<CompanyBloc>(
+            create: (context) => di.sl<CompanyBloc>(),
+            child: CompanyDriverDetailPage(
+              link: extra['link'] as CompanyLinkEntity,
+              profile: extra['profile'] as UserEntity,
+            ),
           );
         },
       ),
