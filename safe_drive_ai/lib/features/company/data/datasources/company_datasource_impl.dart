@@ -54,6 +54,32 @@ class CompanyDatasourceImpl implements CompanyDatasource {
 
   @override
   Future<void> unlinkDriver(String linkId) async {
+    // 1. Obtener el vínculo para saber el driverId
+    final linkDoc = await _firestore.collection('company_drivers').doc(linkId).get();
+    if (!linkDoc.exists) {
+      throw const DocumentNotFoundException('No se encontró el vínculo del conductor.');
+    }
+
+    final driverId = linkDoc.data()?['driverId'] as String?;
+    if (driverId == null) {
+      throw const FirestoreException('Vínculo inválido: falta driverId.');
+    }
+
+    // 2. Verificar si el conductor tiene algún viaje en curso (activo)
+    final activeTrips = await _firestore
+        .collection('trips')
+        .where('driverId', isEqualTo: driverId)
+        .where('status', isEqualTo: 'active')
+        .limit(1)
+        .get();
+
+    if (activeTrips.docs.isNotEmpty) {
+      throw const FirestoreException(
+        'No puedes desvincular a este conductor mientras tiene un viaje en curso.',
+      );
+    }
+
+    // 3. Si no hay viaje en curso, desvincular
     await _firestore.collection('company_drivers').doc(linkId).update({
       'status': 'inactive',
       'unlinkedAt': FieldValue.serverTimestamp(),

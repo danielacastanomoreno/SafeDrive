@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,9 @@ import '../../../auth/domain/entities/company_link_entity.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../trips/domain/entities/trip_entity.dart';
 import '../../../trips/domain/usecases/get_driver_trips_usecase.dart';
+import '../bloc/company_bloc.dart';
+import '../bloc/company_event.dart';
+import '../bloc/company_state.dart';
 
 class CompanyDriverDetailPage extends StatefulWidget {
   const CompanyDriverDetailPage({
@@ -56,105 +60,244 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
     return '${hours}h ${minutes}m';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Detalle del Conductor'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.textOnPrimary,
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildProfileHeader(),
+  void _confirmUnlink(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
-              child: Text(
-                'Historial de Viajes',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppColors.error),
+              SizedBox(width: 8),
+              Text(
+                'Confirmar desvinculación',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            '¿Confirmas que quieres desvincular a ${widget.profile.name}?\n\n'
+            'Seguirás viendo su historial de viajes anteriores.',
+            style: const TextStyle(fontSize: 15, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
-          ),
-          FutureBuilder<List<TripEntity>?>(
-            future: _tripsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  ),
-                );
-              }
-
-              if (snapshot.hasError || snapshot.data == null) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Center(
-                      child: Text(
-                        'Error al cargar el historial de viajes.',
-                        style: TextStyle(color: AppColors.error),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.read<CompanyBloc>().add(
+                      CompanyDriverUnlinkRequested(
+                        linkId: widget.link.id,
+                        companyId: widget.link.companyId,
                       ),
-                    ),
-                  ),
-                );
-              }
-
-              final trips = snapshot.data!;
-              if (trips.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Center(
-                      child: Text(
-                        'Este conductor no ha registrado viajes aún.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final trip = trips[index];
-                    return _buildTripCard(trip);
-                  },
-                  childCount: trips.length,
+                    );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              );
-            },
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          context.push('/company/create-trip', extra: {
-            'companyId': widget.link.companyId,
-            'driverId': widget.profile.id,
-            'driverName': widget.profile.name,
-          });
-        },
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.textOnPrimary,
-        icon: const Icon(Icons.add_location_alt),
-        label: const Text('Crear Viaje'),
-      ),
+              ),
+              child: const Text('Sí, desvincular'),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildProfileHeader() {
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<CompanyBloc, CompanyState>(
+      listener: (context, state) {
+        if (state is CompanyActionSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          context.pop(); // Regresar a la lista de conductores
+        } else if (state is CompanyError) {
+          if (state.message.contains('viaje en curso')) {
+            showDialog<void>(
+              context: context,
+              builder: (dialogContext) {
+                return AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: AppColors.error),
+                      SizedBox(width: 8),
+                      Text(
+                        'Acción no permitida',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  content: Text(
+                    state.message,
+                    style: const TextStyle(fontSize: 15, height: 1.4),
+                  ),
+                  actions: [
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('Entendido'),
+                    ),
+                  ],
+                );
+              },
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      },
+      builder: (context, state) {
+        final isLoading = state is CompanyLoading;
+        return Stack(
+          children: [
+            Scaffold(
+              backgroundColor: AppColors.background,
+              appBar: AppBar(
+                title: const Text('Detalle del Conductor'),
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+              body: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _buildProfileHeader(context),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
+                      child: Text(
+                        'Historial de Viajes',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                      ),
+                    ),
+                  ),
+                  FutureBuilder<List<TripEntity>?>(
+                    future: _tripsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Center(
+                              child: CircularProgressIndicator(color: AppColors.primary),
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (snapshot.hasError || snapshot.data == null) {
+                        return const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Center(
+                              child: Text(
+                                'Error al cargar el historial de viajes.',
+                                style: TextStyle(color: AppColors.error),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final trips = snapshot.data!;
+                      if (trips.isEmpty) {
+                        return const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Center(
+                              child: Text(
+                                'Este conductor no ha registrado viajes aún.',
+                                style: TextStyle(color: AppColors.textSecondary),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final trip = trips[index];
+                            return _buildTripCard(trip);
+                          },
+                          childCount: trips.length,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              floatingActionButton: widget.link.status == LinkStatus.active
+                  ? FloatingActionButton.extended(
+                      onPressed: () {
+                        context.push('/company/create-trip', extra: {
+                          'companyId': widget.link.companyId,
+                          'driverId': widget.profile.id,
+                          'driverName': widget.profile.name,
+                        });
+                      },
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.textOnPrimary,
+                      icon: const Icon(Icons.add_location_alt),
+                      label: const Text('Crear Viaje'),
+                    )
+                  : null,
+            ),
+            if (isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileHeader(BuildContext context) {
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.all(24),
@@ -210,6 +353,27 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
               ),
             ],
           ),
+          if (widget.link.status == LinkStatus.active) ...[
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: () => _confirmUnlink(context),
+              icon: const Icon(Icons.person_remove_outlined, color: AppColors.error),
+              label: const Text(
+                'Desvincular conductor',
+                style: TextStyle(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
