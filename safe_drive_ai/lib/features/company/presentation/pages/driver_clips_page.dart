@@ -82,7 +82,7 @@ class _DriverClipsPageState extends State<DriverClipsPage> {
           ).whenComplete(() {
             if (!mounted) return;
             context.read<DriverClipsBloc>().add(
-                  DriverClipsPageOpened(driverId: widget.driverId),
+                  const DriverClipsVideoPlayerDismissed(),
                 );
           });
         } else if (state is DriverClipsLoaded && state.urlError != null) {

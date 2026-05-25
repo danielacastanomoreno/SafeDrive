@@ -30,7 +30,6 @@ import 'features/company/data/repositories/driver_clips_repository_impl.dart';
 import 'features/company/domain/repositories/company_repository.dart';
 import 'features/company/domain/repositories/driver_clips_repository.dart';
 import 'features/company/domain/usecases/cancel_invitation_usecase.dart';
-import 'features/company/domain/usecases/create_trip_with_destination_usecase.dart';
 import 'features/company/domain/usecases/fetch_driver_clips_usecase.dart';
 import 'features/company/domain/usecases/get_company_drivers_usecase.dart';
 import 'features/company/domain/usecases/get_company_invitations_usecase.dart';

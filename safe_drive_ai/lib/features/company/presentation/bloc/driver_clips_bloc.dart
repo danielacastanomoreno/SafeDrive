@@ -22,6 +22,7 @@ class DriverClipsBloc extends Bloc<DriverClipsEvent, DriverClipsState> {
     on<DriverClipsLoadMoreRequested>(_onLoadMore);
     on<DriverClipsRetryRequested>(_onRetry);
     on<DriverClipTapped>(_onClipTapped);
+    on<DriverClipsVideoPlayerDismissed>(_onVideoPlayerDismissed);
     if (kDebugMode) {
       on<DriverClipsSeedMockRequested>(_onSeedMock);
     }
@@ -131,6 +132,25 @@ class DriverClipsBloc extends Bloc<DriverClipsEvent, DriverClipsState> {
     Emitter<DriverClipsState> emit,
   ) async {
     if (_driverId != null) {
+      add(DriverClipsPageOpened(driverId: _driverId!));
+    }
+  }
+
+  /// Restaura el estado de lista cuando el reproductor se cierra,
+  /// sin volver a buscar en Firebase Storage.
+  Future<void> _onVideoPlayerDismissed(
+    DriverClipsVideoPlayerDismissed event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is DriverClipsVideoUrlReady) {
+      emit(DriverClipsLoaded(
+        clips: currentState.clips,
+        hasMore: currentState.hasMore,
+        nextPageToken: currentState.nextPageToken,
+      ));
+    } else if (_driverId != null) {
+      // Fallback solo si el estado ya no tiene clips (caso poco probable)
       add(DriverClipsPageOpened(driverId: _driverId!));
     }
   }

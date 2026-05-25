@@ -35,6 +35,11 @@ class DriverClipTapped extends DriverClipsEvent {
   List<Object?> get props => [clip];
 }
 
+/// El usuario cerró el reproductor de video — restaura la lista sin re-fetch.
+class DriverClipsVideoPlayerDismissed extends DriverClipsEvent {
+  const DriverClipsVideoPlayerDismissed();
+}
+
 /// Solo disponible en kDebugMode — inyecta clips ficticios sin tocar Storage.
 class DriverClipsSeedMockRequested extends DriverClipsEvent {
   const DriverClipsSeedMockRequested();
