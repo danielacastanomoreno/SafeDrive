@@ -23,12 +23,18 @@ import 'features/auth/domain/usecases/set_active_company_usecase.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/company/data/datasources/company_datasource.dart';
 import 'features/company/data/datasources/company_datasource_impl.dart';
+import 'features/company/data/datasources/driver_clips_datasource.dart';
+import 'features/company/data/datasources/driver_clips_datasource_impl.dart';
 import 'features/company/data/repositories/company_repository_impl.dart';
+import 'features/company/data/repositories/driver_clips_repository_impl.dart';
 import 'features/company/domain/repositories/company_repository.dart';
+import 'features/company/domain/repositories/driver_clips_repository.dart';
 import 'features/company/domain/usecases/cancel_invitation_usecase.dart';
+import 'features/company/domain/usecases/fetch_driver_clips_usecase.dart';
 import 'features/company/domain/usecases/get_company_drivers_usecase.dart';
 import 'features/company/domain/usecases/get_company_invitations_usecase.dart';
 import 'features/company/domain/usecases/get_driver_profile_usecase.dart';
+import 'features/company/domain/usecases/get_clip_download_url_usecase.dart';
 import 'features/company/domain/usecases/register_driver_by_company_usecase.dart';
 import 'features/company/domain/usecases/send_invitation_usecase.dart';
 import 'features/company/domain/usecases/unlink_driver_usecase.dart';
@@ -38,6 +44,7 @@ import 'features/company/domain/usecases/approve_trip_closure_usecase.dart';
 import 'features/company/domain/usecases/reject_trip_closure_usecase.dart';
 import 'features/company/domain/usecases/create_trip_with_destination_usecase.dart';
 import 'features/company/presentation/bloc/company_bloc.dart';
+import 'features/company/presentation/bloc/driver_clips_bloc.dart';
 import 'features/driver/data/datasources/driver_datasource.dart';
 import 'features/driver/data/datasources/driver_datasource_impl.dart';
 import 'features/driver/data/repositories/driver_repository_impl.dart';
@@ -144,9 +151,17 @@ void _initCompany() {
     () => CompanyDatasourceImpl(firestore: sl()),
   );
 
+  sl.registerLazySingleton<DriverClipsDataSource>(
+    () => DriverClipsDataSourceImpl(firebaseStorage: sl()),
+  );
+
   // Repository
   sl.registerLazySingleton<CompanyRepository>(
     () => CompanyRepositoryImpl(sl()),
+  );
+
+  sl.registerLazySingleton<DriverClipsRepository>(
+    () => DriverClipsRepositoryImpl(dataSource: sl()),
   );
 
   // Use cases
@@ -162,6 +177,8 @@ void _initCompany() {
   sl.registerLazySingleton(() => ApproveTripClosureUseCase(sl()));
   sl.registerLazySingleton(() => RejectTripClosureUseCase(sl()));
   sl.registerLazySingleton(() => CreateTripWithDestinationUseCase(sl()));
+  sl.registerLazySingleton(() => FetchDriverClipsUseCase(sl()));
+  sl.registerLazySingleton(() => GetClipDownloadUrlUseCase(sl()));
 
   // BLoC — factory para instancia fresca en cada CompanyHomePage
   sl.registerFactory(
@@ -176,6 +193,13 @@ void _initCompany() {
       getPendingTripsUseCase: sl(),
       approveTripClosureUseCase: sl(),
       rejectTripClosureUseCase: sl(),
+    ),
+  );
+
+  sl.registerFactory(
+    () => DriverClipsBloc(
+      fetchClipsUseCase: sl(),
+      getDownloadUrlUseCase: sl(),
     ),
   );
 }

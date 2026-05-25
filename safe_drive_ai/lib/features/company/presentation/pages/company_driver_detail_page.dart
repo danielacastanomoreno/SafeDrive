@@ -355,23 +355,56 @@ class _CompanyDriverDetailPageState extends State<CompanyDriverDetailPage> {
           ),
           if (widget.link.status == LinkStatus.active) ...[
             const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () => _confirmUnlink(context),
-              icon: const Icon(Icons.person_remove_outlined, color: AppColors.error),
-              label: const Text(
-                'Desvincular conductor',
-                style: TextStyle(
-                  color: AppColors.error,
-                  fontWeight: FontWeight.bold,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.push('/company/driver-clips', extra: {
+                        'driverId': widget.profile.id,
+                        'driverName': widget.profile.name,
+                      });
+                    },
+                    icon: const Icon(Icons.videocam_outlined, color: AppColors.primary),
+                    label: const Text(
+                      'Ver clips',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.error),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmUnlink(context),
+                    icon: const Icon(Icons.person_remove_outlined, color: AppColors.error),
+                    label: const Text(
+                      'Desvincular',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.error),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ],

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:camera/camera.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -91,6 +92,7 @@ class _TripMapPageState extends State<TripMapPage>
   final VoiceAlertService _voiceAlertService = VoiceAlertService();
   final VoiceResponseService _voiceResponseService = VoiceResponseService();
   final DrowsinessEventLogger _eventLogger = DrowsinessEventLogger();
+  final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
   late final AnimationController _blinkController;
   late final Animation<double> _blinkAnimation;
 
@@ -284,6 +286,7 @@ class _TripMapPageState extends State<TripMapPage>
     // Iniciar grabación de clips en paralelo sin bloquear detección
     unawaited(_startIncrementalClipRecording(
       tripId: tripState.trip.id,
+      driverId: tripState.trip.driverId,
       level: alert.level,
       triggeredAt: alert.triggeredAt,
     ));
@@ -533,6 +536,7 @@ class _TripMapPageState extends State<TripMapPage>
 
   Future<void> _startIncrementalClipRecording({
     required String tripId,
+    required String driverId,
     required DrowsinessLevel level,
     required DateTime triggeredAt,
   }) async {
@@ -589,6 +593,11 @@ class _TripMapPageState extends State<TripMapPage>
             try {
               await File(file.path).copy(targetPath);
               debugPrint('[DROWSINESS_CLIP] Chunk $chunkIndex guardado: $targetPath');
+              unawaited(_uploadClipToStorage(
+                localPath: targetPath,
+                fileName: fileName,
+                driverId: driverId,
+              ));
               chunkIndex++;
             } catch (e) {
               debugPrint('[DROWSINESS_CLIP] Error guardando chunk: $e');
@@ -635,6 +644,20 @@ class _TripMapPageState extends State<TripMapPage>
         }
       } catch (_) {}
       _drowsinessClipRecordingActive = false;
+    }
+  }
+
+  Future<void> _uploadClipToStorage({
+    required String localPath,
+    required String fileName,
+    required String driverId,
+  }) async {
+    try {
+      final storageRef = _firebaseStorage.ref('drivers/$driverId/clips/$fileName');
+      await storageRef.putFile(File(localPath));
+      debugPrint('[DROWSINESS_CLIP] Subido a Storage: drivers/$driverId/clips/$fileName');
+    } catch (e) {
+      debugPrint('[DROWSINESS_CLIP] Error al subir a Storage: $e');
     }
   }
 

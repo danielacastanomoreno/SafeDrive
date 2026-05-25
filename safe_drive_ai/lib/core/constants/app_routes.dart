@@ -16,8 +16,10 @@ import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
 import '../../features/auth/domain/entities/company_link_entity.dart';
 import '../../features/company/presentation/bloc/company_bloc.dart';
+import '../../features/company/presentation/bloc/driver_clips_bloc.dart';
 import '../../features/company/presentation/pages/company_driver_detail_page.dart';
 import '../../features/company/presentation/pages/company_home_page.dart';
+import '../../features/company/presentation/pages/driver_clips_page.dart';
 import '../../features/company/presentation/pages/register_driver_page.dart';
 import '../../injection_container.dart' as di;
 import '../../features/company/presentation/pages/create_trip_page.dart';
@@ -156,6 +158,20 @@ class AppRouter {
           return TripApprovalDetailPage(
             trip: extra['trip'] as TripEntity,
             companyId: extra['companyId'] as String,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/company/driver-clips',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          if (extra == null) return const SizedBox.shrink();
+          return BlocProvider<DriverClipsBloc>(
+            create: (context) => di.sl<DriverClipsBloc>(),
+            child: DriverClipsPage(
+              driverId: extra['driverId'] as String,
+              driverName: extra['driverName'] as String,
+            ),
           );
         },
       ),
