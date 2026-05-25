@@ -1,0 +1,132 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../domain/usecases/fetch_driver_clips_usecase.dart';
+import '../../domain/usecases/get_clip_download_url_usecase.dart';
+import 'driver_clips_event.dart';
+import 'driver_clips_state.dart';
+
+class DriverClipsBloc extends Bloc<DriverClipsEvent, DriverClipsState> {
+  final FetchDriverClipsUseCase fetchClipsUseCase;
+  final GetClipDownloadUrlUseCase getDownloadUrlUseCase;
+
+  static const int _pageSize = 20;
+  String? _driverId;
+
+  DriverClipsBloc({
+    required this.fetchClipsUseCase,
+    required this.getDownloadUrlUseCase,
+  }) : super(const DriverClipsInitial()) {
+    on<DriverClipsPageOpened>(_onPageOpened);
+    on<DriverClipsLoadMoreRequested>(_onLoadMore);
+    on<DriverClipsRetryRequested>(_onRetry);
+    on<DriverClipTapped>(_onClipTapped);
+  }
+
+  Future<void> _onPageOpened(
+    DriverClipsPageOpened event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    _driverId = event.driverId;
+    emit(const DriverClipsLoading());
+
+    final result = await fetchClipsUseCase(
+      FetchDriverClipsParams(
+        driverId: event.driverId,
+        pageSize: _pageSize,
+        pageToken: null,
+      ),
+    );
+
+    result.fold(
+      (failure) => emit(DriverClipsError(message: failure.message)),
+      (clips) {
+        if (clips.isEmpty) {
+          emit(const DriverClipsEmpty());
+        } else {
+          emit(DriverClipsLoaded(
+            clips: clips,
+            hasMore: clips.length == _pageSize,
+            nextPageToken: _pageSize.toString(),
+          ));
+        }
+      },
+    );
+  }
+
+  Future<void> _onLoadMore(
+    DriverClipsLoadMoreRequested event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! DriverClipsLoaded) return;
+    if (!currentState.hasMore || currentState.isLoadingMore) return;
+
+    emit(currentState.copyWith(isLoadingMore: true));
+
+    final result = await fetchClipsUseCase(
+      FetchDriverClipsParams(
+        driverId: _driverId!,
+        pageSize: _pageSize,
+        pageToken: currentState.nextPageToken,
+      ),
+    );
+
+    result.fold(
+      (_) => emit(currentState.copyWith(isLoadingMore: false)),
+      (newClips) {
+        final allClips = [...currentState.clips, ...newClips];
+        final nextOffset =
+            (int.tryParse(currentState.nextPageToken ?? '0') ?? 0) +
+                newClips.length;
+        emit(DriverClipsLoaded(
+          clips: allClips,
+          hasMore: newClips.length == _pageSize,
+          nextPageToken: nextOffset.toString(),
+        ));
+      },
+    );
+  }
+
+  Future<void> _onClipTapped(
+    DriverClipTapped event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! DriverClipsLoaded) return;
+
+    emit(currentState.copyWith(isLoadingUrl: true));
+
+    final result = await getDownloadUrlUseCase(
+      GetClipDownloadUrlParams(
+        firebaseStoragePath: event.clip.firebaseStoragePath,
+      ),
+    );
+
+    result.fold(
+      (failure) {
+        emit(currentState.copyWith(
+          isLoadingUrl: false,
+          urlError: failure.message,
+        ));
+      },
+      (downloadUrl) {
+        emit(DriverClipsVideoUrlReady(
+          clip: event.clip,
+          downloadUrl: downloadUrl,
+          clips: currentState.clips,
+          hasMore: currentState.hasMore,
+          nextPageToken: currentState.nextPageToken,
+        ));
+      },
+    );
+  }
+
+  Future<void> _onRetry(
+    DriverClipsRetryRequested event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    if (_driverId != null) {
+      add(DriverClipsPageOpened(driverId: _driverId!));
+    }
+  }
+}

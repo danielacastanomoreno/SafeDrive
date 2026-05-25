@@ -125,6 +125,15 @@ class TripAlreadyActiveException implements Exception {
 
 /// La cédula proporcionada ya pertenece a un conductor registrado.
 /// La empresa debe usar "Invitar conductor" en su lugar.
+class DataSourceException implements Exception {
+  const DataSourceException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'DataSourceException: $message';
+}
+
 class CedulaAlreadyRegisteredException implements Exception {
   const CedulaAlreadyRegisteredException();
 
