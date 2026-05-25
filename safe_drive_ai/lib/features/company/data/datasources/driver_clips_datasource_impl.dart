@@ -45,6 +45,10 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
       int endIndex = (startIndex + pageSize).clamp(0, clips.length);
 
       return clips.sublist(startIndex, endIndex);
+    } on FirebaseException catch (e) {
+      // La carpeta no existe aún (ningún clip grabado) → lista vacía
+      if (e.code == 'object-not-found') return [];
+      throw DataSourceException(e.message ?? e.code);
     } catch (e) {
       throw DataSourceException(e.toString());
     }
@@ -52,6 +56,10 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
 
   @override
   Future<String> getClipDownloadUrl(String firebaseStoragePath) async {
+    // Clips de prueba (debug mock) ya traen la URL directa.
+    if (firebaseStoragePath.startsWith('https://')) {
+      return firebaseStoragePath;
+    }
     try {
       final ref = _firebaseStorage.ref(firebaseStoragePath);
       return await ref.getDownloadURL();

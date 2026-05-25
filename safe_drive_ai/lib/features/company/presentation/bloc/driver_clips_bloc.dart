@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/entities/video_clip_entity.dart';
 import '../../domain/usecases/fetch_driver_clips_usecase.dart';
 import '../../domain/usecases/get_clip_download_url_usecase.dart';
 import 'driver_clips_event.dart';
@@ -20,6 +22,9 @@ class DriverClipsBloc extends Bloc<DriverClipsEvent, DriverClipsState> {
     on<DriverClipsLoadMoreRequested>(_onLoadMore);
     on<DriverClipsRetryRequested>(_onRetry);
     on<DriverClipTapped>(_onClipTapped);
+    if (kDebugMode) {
+      on<DriverClipsSeedMockRequested>(_onSeedMock);
+    }
   }
 
   Future<void> _onPageOpened(
@@ -128,5 +133,63 @@ class DriverClipsBloc extends Bloc<DriverClipsEvent, DriverClipsState> {
     if (_driverId != null) {
       add(DriverClipsPageOpened(driverId: _driverId!));
     }
+  }
+
+  // ── Debug only ────────────────────────────────────────────────────────────
+  /// Inyecta clips ficticios en el estado sin tocar Firebase Storage.
+  /// Usa URLs públicas de Google para que el reproductor funcione.
+  Future<void> _onSeedMock(
+    DriverClipsSeedMockRequested event,
+    Emitter<DriverClipsState> emit,
+  ) async {
+    final now = DateTime.now();
+
+    // Google public sample videos — small, always available
+    const sampleUrls = [
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    ];
+
+    final mockClips = [
+      VideoClipEntity(
+        id: 'mock_nivel2_001',
+        uploadedAt: now.subtract(const Duration(minutes: 10)),
+        firebaseStoragePath: sampleUrls[0],
+        eventType: ClipEventType.drowsinessLevel2,
+      ),
+      VideoClipEntity(
+        id: 'mock_nivel1_002',
+        uploadedAt: now.subtract(const Duration(hours: 1)),
+        firebaseStoragePath: sampleUrls[1],
+        eventType: ClipEventType.drowsinessLevel1,
+      ),
+      VideoClipEntity(
+        id: 'mock_nivel1_003',
+        uploadedAt: now.subtract(const Duration(hours: 2)),
+        firebaseStoragePath: sampleUrls[2],
+        eventType: ClipEventType.drowsinessLevel1,
+      ),
+      VideoClipEntity(
+        id: 'mock_nivel2_004',
+        uploadedAt: now.subtract(const Duration(hours: 3)),
+        firebaseStoragePath: sampleUrls[3],
+        eventType: ClipEventType.drowsinessLevel2,
+      ),
+      VideoClipEntity(
+        id: 'mock_seatbelt_005',
+        uploadedAt: now.subtract(const Duration(hours: 4)),
+        firebaseStoragePath: sampleUrls[4],
+        eventType: ClipEventType.seatbeltNotDetected,
+      ),
+    ];
+
+    emit(DriverClipsLoaded(
+      clips: mockClips,
+      hasMore: false,
+      nextPageToken: null,
+    ));
   }
 }

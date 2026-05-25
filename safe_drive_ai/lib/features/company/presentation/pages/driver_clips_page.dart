@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -52,6 +53,13 @@ class _DriverClipsPageState extends State<DriverClipsPage> {
     }
   }
 
+  // ── Dev only: inyecta clips ficticios sin tocar Firebase Storage ─────────
+  void _seedMockClips() {
+    context
+        .read<DriverClipsBloc>()
+        .add(const DriverClipsSeedMockRequested());
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<DriverClipsBloc, DriverClipsState>(
@@ -89,6 +97,15 @@ class _DriverClipsPageState extends State<DriverClipsPage> {
         appBar: AppBar(
           title: Text('Clips de ${widget.driverName}'),
           centerTitle: true,
+          // Botón de sembrar datos mock — solo visible en debug
+          actions: [
+            if (kDebugMode)
+              IconButton(
+                icon: const Icon(Icons.science_outlined),
+                tooltip: 'Cargar clips de prueba (mock)',
+                onPressed: _seedMockClips,
+              ),
+          ],
         ),
         body: BlocBuilder<DriverClipsBloc, DriverClipsState>(
           builder: (context, state) {

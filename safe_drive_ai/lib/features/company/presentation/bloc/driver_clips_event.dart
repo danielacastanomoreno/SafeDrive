@@ -34,3 +34,8 @@ class DriverClipTapped extends DriverClipsEvent {
   @override
   List<Object?> get props => [clip];
 }
+
+/// Solo disponible en kDebugMode — inyecta clips ficticios sin tocar Storage.
+class DriverClipsSeedMockRequested extends DriverClipsEvent {
+  const DriverClipsSeedMockRequested();
+}
