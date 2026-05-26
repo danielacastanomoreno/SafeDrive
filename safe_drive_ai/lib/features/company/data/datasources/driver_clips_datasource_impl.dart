@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../models/driver_clip_model.dart';
@@ -18,10 +21,8 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
   }) async {
     try {
       final ref = _firebaseStorage.ref('drivers/$driverId/clips');
-
       final listResult = await ref.listAll();
 
-      // Convert storage items to models
       List<DriverClipModel> clips = [];
       for (final item in listResult.items) {
         final metadata = await item.getMetadata();
@@ -34,30 +35,81 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
         );
       }
 
-      // Sort by uploadedAt descending (newest first)
       clips.sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
 
-      // Simple pagination (20 items at a time)
       int startIndex = 0;
       if (pageToken != null && pageToken.isNotEmpty) {
         startIndex = int.tryParse(pageToken) ?? 0;
       }
       int endIndex = (startIndex + pageSize).clamp(0, clips.length);
-
       return clips.sublist(startIndex, endIndex);
     } on FirebaseException catch (e) {
-      // La carpeta no existe aún (ningún clip grabado) → lista vacía
-      if (e.code == 'object-not-found') return [];
+      if (e.code == 'object-not-found' || e.code == 'unauthorized') {
+        // Storage no disponible → intentar fallback local
+        return _listLocalClips(
+          driverId: driverId,
+          pageSize: pageSize,
+          pageToken: pageToken,
+        );
+      }
       throw DataSourceException(e.message ?? e.code);
     } catch (e) {
       throw DataSourceException(e.toString());
     }
   }
 
+  /// Fallback: lee clips del almacenamiento local del dispositivo.
+  /// Funciona cuando el conductor y la empresa usan el mismo dispositivo.
+  Future<List<DriverClipModel>> _listLocalClips({
+    required String driverId,
+    required int pageSize,
+    String? pageToken,
+  }) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final clipsDir =
+          Directory('${directory.path}/drowsiness_clips/$driverId');
+
+      if (!await clipsDir.exists()) return [];
+
+      final files = clipsDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.mp4'))
+          .toList();
+
+      files.sort(
+          (a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+
+      final clips = files.map((f) {
+        final name = f.path.split(Platform.pathSeparator).last;
+        return DriverClipModel.fromStorageItem(
+          id: name,
+          uploadedAt: f.statSync().modified,
+          // Ruta absoluta local — getClipDownloadUrl la devuelve directamente
+          firebaseStoragePath: f.path,
+        );
+      }).toList();
+
+      int startIndex = 0;
+      if (pageToken != null && pageToken.isNotEmpty) {
+        startIndex = int.tryParse(pageToken) ?? 0;
+      }
+      int endIndex = (startIndex + pageSize).clamp(0, clips.length);
+      return clips.sublist(startIndex, endIndex);
+    } catch (e) {
+      return [];
+    }
+  }
+
   @override
   Future<String> getClipDownloadUrl(String firebaseStoragePath) async {
-    // Clips de prueba (debug mock) ya traen la URL directa.
+    // Mock debug: URL pública directa
     if (firebaseStoragePath.startsWith('https://')) {
+      return firebaseStoragePath;
+    }
+    // Archivo local (ruta absoluta del dispositivo)
+    if (firebaseStoragePath.startsWith('/')) {
       return firebaseStoragePath;
     }
     try {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:video_player/video_player.dart';
@@ -25,13 +27,17 @@ class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
   @override
   void initState() {
     super.initState();
-    _controller =
-        VideoPlayerController.networkUrl(Uri.parse(widget.downloadUrl))
-          ..initialize().then((_) {
-            if (mounted) setState(() {});
-          }).catchError((e) {
-            if (mounted) setState(() => _hasError = true);
-          });
+    // Archivo local → VideoPlayerController.file()
+    // URL remota   → VideoPlayerController.networkUrl()
+    final isLocal = widget.downloadUrl.startsWith('/');
+    _controller = isLocal
+        ? VideoPlayerController.file(File(widget.downloadUrl))
+        : VideoPlayerController.networkUrl(Uri.parse(widget.downloadUrl));
+    _controller.initialize().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((e) {
+      if (mounted) setState(() => _hasError = true);
+    });
   }
 
   @override
