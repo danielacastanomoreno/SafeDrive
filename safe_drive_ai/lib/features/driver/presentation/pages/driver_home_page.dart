@@ -29,6 +29,7 @@ import '../../domain/usecases/get_driver_linked_companies_usecase.dart';
 import '../../domain/usecases/reject_invitation_usecase.dart';
 import '../../domain/usecases/update_driver_profile_usecase.dart';
 import '../bloc/driver_bloc.dart';
+import '../widgets/change_company_bottom_sheet.dart';
 import 'driver_companies_page.dart';
 import 'driver_invitations_page.dart';
 import 'driver_profile_page.dart';
@@ -160,6 +161,27 @@ class _DriverHomePageState extends State<DriverHomePage> {
                             builder: (context) =>
                                 const DrowsinessClipsPage(),
                           ),
+                        );
+                      },
+                    ),
+                    BlocBuilder<AuthBloc, AuthState>(
+                      builder: (context, authState) {
+                        final hasMultipleCompanies =
+                            authState is AuthDriverAuthenticated &&
+                                authState.companies
+                                        .where((c) =>
+                                            c.status ==
+                                            LinkStatus.active)
+                                        .length >
+                                    1;
+                        if (!hasMultipleCompanies) {
+                          return const SizedBox.shrink();
+                        }
+                        return IconButton(
+                          icon: const Icon(Icons.swap_horiz_outlined),
+                          tooltip: 'Cambiar empresa',
+                          onPressed: () =>
+                              showChangeCompanyBottomSheet(context),
                         );
                       },
                     ),
