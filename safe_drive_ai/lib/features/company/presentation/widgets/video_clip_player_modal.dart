@@ -20,6 +20,7 @@ class VideoClipPlayerModal extends StatefulWidget {
 
 class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
   late VideoPlayerController _controller;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -29,11 +30,7 @@ class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
           ..initialize().then((_) {
             if (mounted) setState(() {});
           }).catchError((e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error al cargar el video: $e')),
-              );
-            }
+            if (mounted) setState(() => _hasError = true);
           });
   }
 
@@ -127,6 +124,22 @@ class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
                     ),
                   ],
                 ),
+              ),
+            )
+          else if (_hasError)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  SizedBox(height: 12),
+                  Text(
+                    'No se pudo cargar el video.',
+                    style: TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             )
           else
