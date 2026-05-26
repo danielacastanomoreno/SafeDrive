@@ -28,17 +28,17 @@ class _DrowsinessClipsPageState extends State<DrowsinessClipsPage> {
     try {
       final directory = await getApplicationDocumentsDirectory();
       final clipsDir = Directory('${directory.path}/drowsiness_clips');
-      
-      if (!await clipsDir.exists()) {
-        return [];
+
+      if (!await clipsDir.exists()) return [];
+
+      // Buscar en la raíz y en subcarpetas (organizadas por driverId)
+      final List<File> files = [];
+      for (final entity in clipsDir.listSync(recursive: true)) {
+        if (entity is File && entity.path.endsWith('.mp4')) {
+          files.add(entity);
+        }
       }
 
-      final files = clipsDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.mp4'))
-          .toList();
-      
       files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
       return files;
     } catch (e) {

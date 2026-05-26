@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:video_player/video_player.dart';
@@ -20,21 +22,22 @@ class VideoClipPlayerModal extends StatefulWidget {
 
 class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
   late VideoPlayerController _controller;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _controller =
-        VideoPlayerController.networkUrl(Uri.parse(widget.downloadUrl))
-          ..initialize().then((_) {
-            if (mounted) setState(() {});
-          }).catchError((e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error al cargar el video: $e')),
-              );
-            }
-          });
+    // Archivo local → VideoPlayerController.file()
+    // URL remota   → VideoPlayerController.networkUrl()
+    final isLocal = widget.downloadUrl.startsWith('/');
+    _controller = isLocal
+        ? VideoPlayerController.file(File(widget.downloadUrl))
+        : VideoPlayerController.networkUrl(Uri.parse(widget.downloadUrl));
+    _controller.initialize().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((e) {
+      if (mounted) setState(() => _hasError = true);
+    });
   }
 
   @override
@@ -127,6 +130,22 @@ class _VideoClipPlayerModalState extends State<VideoClipPlayerModal> {
                     ),
                   ],
                 ),
+              ),
+            )
+          else if (_hasError)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  SizedBox(height: 12),
+                  Text(
+                    'No se pudo cargar el video.',
+                    style: TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             )
           else

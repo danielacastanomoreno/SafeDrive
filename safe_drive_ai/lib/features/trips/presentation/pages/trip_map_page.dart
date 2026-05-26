@@ -557,7 +557,8 @@ class _TripMapPageState extends State<TripMapPage>
     final levelLabel = level == DrowsinessLevel.level1 ? 'nivel1' : 'nivel2';
 
     final directory = await getApplicationDocumentsDirectory();
-    final clipsDir = Directory('${directory.path}/drowsiness_clips');
+    // Organizar por driverId para que la empresa pueda leerlos localmente
+    final clipsDir = Directory('${directory.path}/drowsiness_clips/$driverId');
     await clipsDir.create(recursive: true);
 
     int chunkIndex = 0;
