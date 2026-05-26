@@ -59,7 +59,8 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
   }
 
   /// Fallback: lee clips del almacenamiento local del dispositivo.
-  /// Funciona cuando el conductor y la empresa usan el mismo dispositivo.
+  /// Busca en drowsiness_clips/{driverId}/ (ruta nueva) y en
+  /// drowsiness_clips/ (ruta antigua, compatibilidad con clips previos).
   Future<List<DriverClipModel>> _listLocalClips({
     required String driverId,
     required int pageSize,
@@ -67,16 +68,29 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
   }) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final clipsDir =
-          Directory('${directory.path}/drowsiness_clips/$driverId');
+      final root = '${directory.path}/drowsiness_clips';
 
-      if (!await clipsDir.exists()) return [];
+      final List<File> files = [];
 
-      final files = clipsDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.mp4'))
-          .toList();
+      // Ruta nueva: drowsiness_clips/{driverId}/
+      final newDir = Directory('$root/$driverId');
+      if (await newDir.exists()) {
+        files.addAll(newDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.mp4')));
+      }
+
+      // Ruta antigua: drowsiness_clips/ (clips grabados antes del cambio)
+      final oldDir = Directory(root);
+      if (await oldDir.exists()) {
+        files.addAll(oldDir
+            .listSync() // solo primer nivel, sin subcarpetas
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.mp4')));
+      }
+
+      if (files.isEmpty) return [];
 
       files.sort(
           (a, b) => b.statSync().modified.compareTo(a.statSync().modified));
@@ -86,7 +100,6 @@ class DriverClipsDataSourceImpl implements DriverClipsDataSource {
         return DriverClipModel.fromStorageItem(
           id: name,
           uploadedAt: f.statSync().modified,
-          // Ruta absoluta local — getClipDownloadUrl la devuelve directamente
           firebaseStoragePath: f.path,
         );
       }).toList();
