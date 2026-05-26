@@ -7,10 +7,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 
-/// Pantalla inicial de Safe Drive AI.
-///
-/// Dispara [AuthCheckSessionRequested] en [initState] y escucha el estado del
-/// [AuthBloc] para redirigir al destino correcto sin lógica de negocio propia.
+//Pantalla inicial de Safe Drive AI.
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -40,10 +37,11 @@ class _SplashPageState extends State<SplashPage> {
             context.go('/role-selection');
           }
         } else if (state is AuthDriverAuthenticated) {
-          final requiresCompanySelection =
+          //Caso 2: una empresa → activeCompanyId ya viene resuelto en el BLoC.
+          final requiresSelection =
               state.companies.length > 1 && state.activeCompanyId == null;
 
-          if (requiresCompanySelection) {
+          if (requiresSelection) {
             context.go('/driver/select-company');
           } else {
             context.go('/driver/home', extra: state);
